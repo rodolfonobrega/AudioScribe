@@ -14,7 +14,7 @@ transcription:
   provider: litellm        # Provider: litellm (unified API for all providers)
   model: groq/whisper-large-v3-turbo  # Model name (e.g., groq/whisper-large-v3, openai/whisper-1)
   fallback_models:
-    - openai/whisper-1     # Fallback models (tried in order if primary fails)
+    - groq/whisper-large-v3     # Fallback models (tried in order if primary fails)
   max_retries: 2           # Number of retries with exponential backoff before fallback
   retry_delay: 1.0         # Base delay for exponential backoff (in seconds)
   api_key: ${GROQ_API_KEY}  # API key (use environment variable)
@@ -28,7 +28,7 @@ llm:
   provider: litellm        # Provider: litellm, openai, anthropic, etc.
   model: groq/meta-llama/llama-4-maverick-17b-128e-instruct  # Model name
   fallback_models:
-    - openai/gpt-4o-mini   # Fallback models (tried in order if primary fails)
+    - groq/openai/gpt-oss-120b   # Fallback models (tried in order if primary fails)
   max_retries: 2           # Number of retries with exponential backoff before fallback
   retry_delay: 1.0         # Base delay for exponential backoff (in seconds)
   api_key: ${GROQ_API_KEY} # API key (use environment variable)
@@ -50,7 +50,7 @@ llm:
 # Output Handler Configuration
 output:
   handlers:
-    - autoit               # Output handlers: stdout, clipboard, file, autoit, pyautogui, applescript, xdotool
+    - pyautogui               # Output handlers: stdout, clipboard, file, autoit, pyautogui, applescript, xdotool
     # - pyautogui          # Cross-platform, fast typing (recommended)
     # - clipboard
     # - file
