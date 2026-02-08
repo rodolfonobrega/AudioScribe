@@ -154,23 +154,26 @@ class PyAutoGUIOutputHandler(AbstractOutputHandler):
 
 class AutoItOutputHandler(AbstractOutputHandler):
     """AutoIt output handler (Windows only)."""
-    
+
     def __init__(self, config=None):
         self.config = config
         self._platform = platform.system()
         if self._platform != "Windows":
             raise RuntimeError("AutoItOutputHandler is Windows-only")
-        
+
         try:
             import autoit
             self.autoit = autoit
+            # Configure for maximum speed (no delays)
+            self.autoit.opt("SendKeyDelay", 0)
+            self.autoit.opt("SendKeyDownDelay", 0)
         except ImportError:
             raise ImportError("pyautoit is required. Install: pip install pyautoit")
-    
+
     def output(self, text: str, **kwargs) -> None:
-        """Type text using AutoIt."""
+        """Type text using AutoIt with maximum speed."""
         try:
-            self.autoit.send(text)
+            self.autoit.send(text, 1)  # flag=1 for raw mode (send text as-is)
             pass  # Silent operation
         except Exception as e:
             print(f"AutoIt error: {e}")
