@@ -42,7 +42,7 @@ llm:
 # Output Handler Configuration
 output:
   handlers:
-    - pyautogui               # Output handlers: stdout, clipboard, file, autoit, pyautogui, applescript, xdotool
+    - autoit               # Output handlers: stdout, clipboard, file, autoit, pyautogui, applescript, xdotool
     # - pyautogui          # Cross-platform, fast typing (recommended)
     # - clipboard
     # - file
