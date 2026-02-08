@@ -18,18 +18,18 @@ from core.interfaces.output_handler import AbstractOutputHandler
 from core.interfaces.keyboard_listener import AbstractKeyboardListener
 
 # Implementations
-from core.implementations.audio.sounddevice_input import SoundDeviceAudioInput
+from core.implementations.audio.sounddevice_input import SoundDeviceInput
 from core.implementations.transcription.groq_transcriber import GroqTranscriber
 from core.implementations.llm.litellm_processor import LiteLLMProcessor
 from core.implementations.output.output_handlers import (
+    ConsoleOutputHandler,
     ClipboardOutputHandler,
-    FileOutputHandler,
-    StdoutOutputHandler,
+    PyAutoGUIOutputHandler,
     AutoItOutputHandler,
     AppleScriptOutputHandler,
     XdotoolOutputHandler
 )
-from core.implementations.keyboard.keyboard_listener import KeyboardListener, InteractionMode
+from core.implementations.keyboard.keyboard_listener import KeyboardListener
 
 # Config
 from config.settings import Config, load_config
@@ -51,17 +51,16 @@ __all__ = [
     "AbstractKeyboardListener",
     
     # Implementations
-    "SoundDeviceAudioInput",
+    "SoundDeviceInput",
     "GroqTranscriber",
     "LiteLLMProcessor",
+    "ConsoleOutputHandler",
     "ClipboardOutputHandler",
-    "FileOutputHandler",
-    "StdoutOutputHandler",
+    "PyAutoGUIOutputHandler",
     "AutoItOutputHandler",
     "AppleScriptOutputHandler",
     "XdotoolOutputHandler",
     "KeyboardListener",
-    "InteractionMode",
     
     # Config
     "Config",

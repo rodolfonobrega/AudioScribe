@@ -10,6 +10,8 @@ from config.settings import Config
 from core.implementations.audio.sounddevice_input import SoundDeviceInput
 from core.implementations.transcription.groq_transcriber import GroqTranscriber
 from core.implementations.llm.litellm_processor import LiteLLMProcessor
+from core.implementations.transcription.fallback_transcriber import FallbackTranscriber
+from core.implementations.llm.fallback_llm_processor import FallbackLLMProcessor
 from core.implementations.output.output_handlers import (
     ConsoleOutputHandler,
     ClipboardOutputHandler,
@@ -39,13 +41,71 @@ class TranscriptionFactory:
 
     @staticmethod
     def create_transcriber(config: Config):
-        """Create transcriber component."""
+        """
+        Create transcriber component.
+
+        Uses GroqTranscriber with internal fallback model chain if configured.
+        For mixing different provider implementations, use create_transcriber_chain().
+        """
         return GroqTranscriber(config.transcription)
 
     @staticmethod
+    def create_transcriber_chain(transcribers: list, max_retries: int = 2, retry_delay: float = 1.0):
+        """
+        Create a fallback chain of multiple transcriber implementations.
+
+        Use this when you want to mix different provider implementations
+        (e.g., GroqTranscriber + WhisperNativeTranscriber + VoskTranscriber).
+
+        Args:
+            transcribers: List of AbstractTranscriber instances
+            max_retries: Retries per transcriber before fallback
+            retry_delay: Base delay for exponential backoff
+
+        Returns:
+            FallbackTranscriber instance
+
+        Example:
+            >>> groq = GroqTranscriber(config1)
+            >>> whisper = WhisperNativeTranscriber(config2)
+            >>> chain = factory.create_transcriber_chain([groq, whisper])
+        """
+        from core.implementations.transcription.fallback_transcriber import FallbackTranscriber
+        return FallbackTranscriber(transcribers, max_retries, retry_delay)
+
+    @staticmethod
     def create_llm_processor(config: Config):
-        """Create LLM processor component."""
+        """
+        Create LLM processor component.
+
+        Uses LiteLLMProcessor with internal fallback model chain if configured.
+        For mixing different provider implementations, use create_llm_processor_chain().
+        """
         return LiteLLMProcessor(config.llm)
+
+    @staticmethod
+    def create_llm_processor_chain(processors: list, max_retries: int = 2, retry_delay: float = 1.0):
+        """
+        Create a fallback chain of multiple LLM processor implementations.
+
+        Use this when you want to mix different provider implementations
+        (e.g., LiteLLMProcessor + OllamaProcessor + LocalProcessor).
+
+        Args:
+            processors: List of AbstractLLMProcessor instances
+            max_retries: Retries per processor before fallback
+            retry_delay: Base delay for exponential backoff
+
+        Returns:
+            FallbackLLMProcessor instance
+
+        Example:
+            >>> litellm = LiteLLMProcessor(config1)
+            >>> ollama = OllamaProcessor(config2)
+            >>> chain = factory.create_llm_processor_chain([litellm, ollama])
+        """
+        from core.implementations.llm.fallback_llm_processor import FallbackLLMProcessor
+        return FallbackLLMProcessor(processors, max_retries, retry_delay)
 
     @staticmethod
     def create_output_handlers(config: Config):
