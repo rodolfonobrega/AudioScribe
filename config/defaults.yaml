@@ -1,0 +1,64 @@
+# AudioScribe - Default Configuration
+
+# Audio Input Configuration
+audio:
+  sample_rate: 16000      # Audio sample rate in Hz
+  channels: 1              # Number of audio channels (1=mono, 2=stereo)
+  chunk_size: 1024         # Buffer size for audio recording
+  device_index: null       # Audio device index (null=default device)
+  dtype: "float32"         # Audio data type
+  min_duration: 0.75       # Minimum audio duration in seconds
+
+# Transcription Service Configuration
+transcription:
+  provider: litellm        # Provider: litellm (unified API for all providers)
+  model: groq/whisper-large-v3-turbo  # Model name (e.g., groq/whisper-large-v3, openai/whisper-1)
+  api_key: ${GROQ_API_KEY}  # API key (use environment variable)
+  base_url: null           # Custom base URL (optional)
+  language: auto           # Language code (auto=auto-detect)
+  temperature: 0.0         # Sampling temperature (0.0=deterministic)
+
+# LLM Processor Configuration
+llm:
+  enabled: true            # Enable/disable LLM post-processing
+  provider: litellm        # Provider: litellm, openai, anthropic, etc.
+  model: groq/meta-llama/llama-4-maverick-17b-128e-instruct  # Model name
+  api_key: ${GROQ_API_KEY} # API key (use environment variable)
+  temperature: 0.7         # Sampling temperature
+  max_tokens: 1000         # Maximum tokens to generate
+  system_prompt: |
+    You are a transcription correction assistant. Your task is to:
+    1. Analyze the full context of transcribed text
+    2. Fix transcription errors by understanding context (words that sound similar but have different meanings)
+    3. Correct grammar, spelling, and punctuation
+    4. Maintain the ORIGINAL language - do NOT translate
+    5. Return ONLY the corrected text, no explanations
+    
+    Important: 
+    - Use context to distinguish between homophones and similar-sounding words
+    - Preserve the original language of speech
+    - Output only the final corrected text, nothing else
+
+# Output Handler Configuration
+output:
+  handlers:
+    - pyautogui               # Output handlers: stdout, clipboard, file, autoit, pyautogui, applescript, xdotool
+    # - pyautogui          # Cross-platform, fast typing (recommended)
+    # - clipboard
+    # - file
+  file_path: transcripts.txt  # File path for file handler
+  file_mode: a              # File mode: a=append, w=overwrite
+  verbose: true             # Enable verbose output
+
+# Keyboard Listener Configuration
+keyboard:
+  enabled: true             # Enable keyboard listener
+  hotkey: f9                # Hotkey combination (e.g., f9, ctrl+space, ctrl+shift+t)
+  mode: push_to_talk        # Interaction mode: push_to_talk, toggle
+  verbose: true             # Enable verbose output
+
+# Orchestrator Configuration
+orchestrator:
+  verbose: true             # Enable verbose logging
+  log_level: INFO           # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  debug: false              # Enable debug mode
