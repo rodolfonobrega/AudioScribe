@@ -1,6 +1,6 @@
 {
   "name": "audioscribe-desktop",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "AudioScribe Desktop - Cross-platform Speech-to-Text with AI",
   "main": "main.js",
   "scripts": {
@@ -42,6 +42,10 @@
     "mac": {
       "target": ["dmg", "zip"],
       "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": ["AppImage", "tar.gz"],
+      "category": "Utility"
     },
     "nsis": {
       "oneClick": false,

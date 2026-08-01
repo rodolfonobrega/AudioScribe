@@ -48,10 +48,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          fail_on_unmatched_files: false
           files: |
             electron/dist/*.exe
             electron/dist/*.dmg
             electron/dist/*.AppImage
+            electron/dist/*.tar.gz
             electron/dist/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
