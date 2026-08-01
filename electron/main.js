@@ -165,10 +165,20 @@ function connectToPythonServer() {
 }
 
 function launchPythonSidecar() {
-    const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
-    const scriptPath = path.join(__dirname, '..', 'main.py');
+    let executable;
+    let args;
 
-    pythonProcess = spawn(pythonExecutable, [scriptPath, '--server', '--port', '8765']);
+    if (app.isPackaged) {
+        const binName = process.platform === 'win32' ? 'audioscribe_engine.exe' : 'audioscribe_engine';
+        executable = path.join(process.resourcesPath, 'bin', binName);
+        args = ['--server', '--port', '8765'];
+    } else {
+        executable = process.platform === 'win32' ? 'python' : 'python3';
+        const scriptPath = path.join(__dirname, '..', 'main.py');
+        args = [scriptPath, '--server', '--port', '8765'];
+    }
+
+    pythonProcess = spawn(executable, args);
 
     pythonProcess.stdout.on('data', (data) => {
         console.log(`[Python Engine]: ${data}`);
