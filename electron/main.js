@@ -13,11 +13,17 @@ let socketBuffer = '';
 const pendingRequests = new Map();
 let reconnectTimer = null;
 let isRecording = false;
+let lastEngineEvent = { event: 'engine_starting', data: { code: 'engine_starting' } };
 
 function assetPath(name) {
     return app.isPackaged
         ? path.join(process.resourcesPath, 'assets', name)
         : path.join(__dirname, '..', 'assets', name);
+}
+
+function publishEngineEvent(event, data) {
+    lastEngineEvent = { event, data };
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('engine-event', lastEngineEvent);
 }
 
 function providerConfigPath() {
@@ -119,6 +125,9 @@ function createMainWindow() {
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
     });
+    mainWindow.webContents.on('did-finish-load', () => {
+        if (lastEngineEvent) mainWindow.webContents.send('engine-event', lastEngineEvent);
+    });
 
     let hasShownTrayNotification = false;
 
@@ -175,8 +184,8 @@ function connectToPythonServer() {
     if (socketClient && !socketClient.destroyed) return;
     socketBuffer = '';
     socketClient = net.connect({ port: 8765, host: '127.0.0.1' }, () => {
-        hasConnectedToEngine = true;
         console.log('[Electron] Connected to AudioScribe Python Server.');
+        publishEngineEvent('engine_status', { code: 'engine_connected', message: 'Engine connected' });
         sendStoredProviderConfig();
     });
 
@@ -234,6 +243,12 @@ function connectToPythonServer() {
     });
 
     socketClient.on('close', () => {
+        publishEngineEvent('engine_error', {
+            code: 'engine_offline',
+            title: 'Engine disconnected',
+            message: 'The AudioScribe engine is not running. Recording is unavailable until it reconnects.',
+            remediation: 'Click “Try again”. In development, make sure Python 3.10+ and the project dependencies are installed.',
+        });
         for (const [id, request] of pendingRequests) {
             clearTimeout(request.timer);
             request.resolve({ status: 'error', code: 'engine_offline', error: 'Python engine offline' });
@@ -280,7 +295,12 @@ function launchPythonSidecar() {
         args = ['--server', '--port', '8765'];
         if (!require('fs').existsSync(executable)) {
             console.error('[Electron] Packaged engine binary is missing. Desktop app will remain offline.');
-            if (mainWindow) mainWindow.webContents.send('engine-event', { event: 'engine_error', data: { code: 'engine_binary_missing', message: 'Engine Python não foi incluído nesta instalação.' } });
+            publishEngineEvent('engine_error', {
+                code: 'engine_binary_missing',
+                title: 'Engine missing from this installation',
+                message: 'The desktop engine was not included in this installation.',
+                remediation: 'Install a complete AudioScribe release or rebuild the installer so the Python sidecar is included.',
+            });
             return;
         }
     } else {
@@ -293,7 +313,15 @@ function launchPythonSidecar() {
         pythonProcess = spawn(executable, args, { cwd: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..') });
         pythonProcess.on('error', (err) => {
             console.error('[Electron] Python engine failed to start:', err.message);
-            if (mainWindow) mainWindow.webContents.send('engine-event', { event: 'engine_error', data: { code: 'engine_spawn_failed', message: err.message } });
+            const missingPython = err.code === 'ENOENT';
+            publishEngineEvent('engine_error', {
+                code: missingPython ? 'python_missing' : 'engine_spawn_failed',
+                title: missingPython ? 'Python is not installed' : 'Engine could not start',
+                message: missingPython ? 'AudioScribe could not find Python on this computer.' : `The engine could not start: ${err.message}`,
+                remediation: missingPython
+                    ? 'Install Python 3.10 or newer, then run “pip install -r requirements.txt” in the project folder and click “Try again”.'
+                    : 'Open Diagnostics for the technical error, fix the reported issue, and click “Try again”.',
+            });
         });
     } catch (e) {
         console.error('[Electron] Python engine failed to start:', e.message);
@@ -309,10 +337,26 @@ function launchPythonSidecar() {
 
     pythonProcess.on('close', (code) => {
         console.log(`[Python Engine] exited with code ${code}`);
+        if (code !== 0) publishEngineEvent('engine_error', {
+            code: 'engine_exited',
+            title: 'Engine stopped unexpectedly',
+            message: `The engine stopped before AudioScribe could connect (exit code ${code}).`,
+            remediation: 'Open Diagnostics, check the technical details, then click “Try again”.',
+        });
     });
 
     setTimeout(connectToPythonServer, 1500);
 }
+
+ipcMain.handle('retry-engine', async () => {
+    if (pythonProcess && pythonProcess.exitCode === null && !pythonProcess.killed) {
+        connectToPythonServer();
+        return { status: 'ok', message: 'Trying to reconnect to the engine.' };
+    }
+    publishEngineEvent('engine_starting', { code: 'engine_starting', message: 'Starting the AudioScribe engine...' });
+    launchPythonSidecar();
+    return { status: 'ok', message: 'Starting the AudioScribe engine.' };
+});
 
 async function toggleRecording(profile = null) {
     const command = isRecording ? 'stop_recording' : 'start_recording';

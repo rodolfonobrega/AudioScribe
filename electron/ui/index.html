@@ -97,9 +97,10 @@
                     </div>
 
                     <div class="warning-card hidden" id="preflight-warning-card">
-                        <div class="warning-header"><span class="warning-mark">!</span><span>Action Required</span></div>
+                        <div class="warning-header"><span class="warning-mark">!</span><span id="preflight-warning-title">Action Required</span></div>
                         <p id="preflight-warning-text">An API key or local endpoint is required to start.</p>
-                        <button class="btn-primary-sm" id="fix-config-btn" type="button">Open Settings</button>
+                        <div class="warning-actions"><button class="btn-primary-sm" id="retry-engine-btn" type="button">Try again</button><button class="btn-secondary-sm" id="fix-config-btn" type="button">Open Settings</button></div>
+                        <details class="warning-details"><summary>Technical details</summary><code id="preflight-warning-details">No diagnostic details yet.</code></details>
                     </div>
 
                     <section class="card history-card" aria-labelledby="history-heading">

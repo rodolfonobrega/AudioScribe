@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
     sendCommand: (command, params) => ipcRenderer.invoke('engine-command', { command, params }),
+    retryEngine: () => ipcRenderer.invoke('retry-engine'),
     registerShortcut: (key) => ipcRenderer.invoke('register-shortcut', key),
     updateProfiles: (profiles) => ipcRenderer.invoke('update-profiles', profiles),
     getProviderConfig: () => ipcRenderer.invoke('get-provider-config'),

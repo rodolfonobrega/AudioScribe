@@ -25,7 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusBar = $('system-status-bar');
     const statusMsg = $('status-msg');
     const warningCard = $('preflight-warning-card');
+    const warningTitle = $('preflight-warning-title');
     const warningText = $('preflight-warning-text');
+    const warningDetails = $('preflight-warning-details');
     const transProviderSelect = $('transcription-provider-select');
     const transApiKeyInput = $('transcription-api-key-input');
     const transBaseUrlInput = $('transcription-base-url-input');
@@ -43,6 +45,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const setSystemStatus = (kind, message) => {
         statusBar.className = `system-status-bar ${kind || ''}`.trim();
         statusMsg.textContent = message;
+    };
+
+    const showEngineProblem = (problem = {}) => {
+        const code = problem.code || 'engine_offline';
+        const defaults = {
+            engine_offline: { title: 'Engine offline', message: 'The AudioScribe engine is not connected, so recording is unavailable.', remediation: 'Click “Try again”. If this is development mode, install Python 3.10+ and the project requirements.' },
+            engine_timeout: { title: 'Engine did not respond', message: 'The engine started but did not answer in time.', remediation: 'Click “Try again” or open Diagnostics for more information.' },
+        };
+        const fallback = defaults[code] || defaults.engine_offline;
+        warningTitle.textContent = problem.title || fallback.title;
+        warningText.textContent = problem.message || problem.error || fallback.message;
+        warningDetails.textContent = `${problem.remediation || fallback.remediation}\nCode: ${code}${problem.error && problem.error !== problem.message ? `\nDetail: ${problem.error}` : ''}`;
+        warningCard.classList.remove('hidden');
+        setSystemStatus('error', problem.title || fallback.title);
     };
 
     const updateRecordState = (recording) => {
@@ -120,9 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setSystemStatus('', 'Checking engine, microphone, provider and models...');
         const result = await api.sendCommand('preflight', { deep });
         if (result?.status !== 'ok') {
-            setSystemStatus('error', result?.error || 'Engine is offline');
-            warningText.textContent = result?.error || 'The engine did not respond.';
-            warningCard.classList.remove('hidden');
+            showEngineProblem(result);
             return false;
         }
         const failedCheck = result.checks?.find((check) => check.status === 'error');
@@ -188,6 +202,14 @@ document.addEventListener('DOMContentLoaded', () => {
     $('fix-config-btn')?.addEventListener('click', () => {
         document.querySelector('[data-tab="settings"]')?.click();
         transApiKeyInput.focus();
+    });
+    $('retry-engine-btn')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        setSystemStatus('', 'Starting AudioScribe engine...');
+        const result = await api?.retryEngine?.();
+        if (result?.status !== 'ok') showEngineProblem(result);
+        setTimeout(() => { button.disabled = false; }, 1200);
     });
     $('run-preflight-btn')?.addEventListener('click', async () => {
         const ready = await runPreflightCheck();
@@ -357,7 +379,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     api?.onEngineEvent?.((event) => {
         if (!event) return;
-        if (event.event === 'status_changed') {
+        if (event.event === 'engine_status') {
+            warningCard.classList.add('hidden');
+            setSystemStatus('', 'Engine connected · checking configuration');
+        } else if (event.event === 'engine_starting') {
+            setSystemStatus('', 'Starting AudioScribe engine...');
+        } else if (event.event === 'status_changed') {
             if (event.data.status === 'recording') updateRecordState(true);
             if (event.data.status === 'processing' || event.data.status === 'ready') updateRecordState(false);
             setSystemStatus('', event.data.status === 'recording' ? 'Recording' : 'Processing transcription...');
@@ -371,11 +398,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const body = document.createElement('div'); body.className = 'body'; body.textContent = text;
             item.append(meta, body); historyList.prepend(item);
             updateRecordState(false); setSystemStatus('', 'Engine ready · result delivered');
-        } else if (event.event === 'error' || event.event === 'engine_error') {
+        } else if (event.event === 'error') {
             updateRecordState(false);
             setSystemStatus('error', event.data?.message || 'Engine error');
             warningText.textContent = event.data?.message || 'The engine reported an error.';
             warningCard.classList.remove('hidden');
+        } else if (event.event === 'engine_error') {
+            updateRecordState(false);
+            showEngineProblem(event.data || {});
         }
     });
     $('clear-history-btn')?.addEventListener('click', () => {
