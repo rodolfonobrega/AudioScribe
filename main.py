@@ -70,6 +70,11 @@ def main():
     if args.no_keyboard:
         overrides.setdefault('keyboard', {})['enabled'] = False
 
+    # Electron owns global shortcuts in IPC mode. Avoid a second Python
+    # listener receiving the same F9 press.
+    if args.server:
+        overrides.setdefault('keyboard', {})['enabled'] = False
+
     if args.verbose:
         overrides.setdefault('output', {})['verbose'] = True
         overrides.setdefault('orchestrator', {})['verbose'] = True

@@ -6,6 +6,8 @@ Manages the transcription workflow and coordinates components.
 import sys
 import threading
 import queue
+import time
+import uuid
 from typing import Optional, Callable
 
 from core.interfaces.audio_input import AbstractAudioInput
@@ -14,6 +16,7 @@ from core.interfaces.llm_processor import AbstractLLMProcessor
 from core.interfaces.output_handler import AbstractOutputHandler
 from core.interfaces.keyboard_listener import AbstractKeyboardListener
 from core.ui import TerminalUI
+from core.usage import UsageRecord, UsageStore, PriceCatalog, audio_duration_seconds
 
 
 class TranscriptionOrchestrator:
@@ -26,7 +29,9 @@ class TranscriptionOrchestrator:
         output_handler: AbstractOutputHandler,
         llm_processor: Optional[AbstractLLMProcessor] = None,
         keyboard_listener: Optional[AbstractKeyboardListener] = None,
-        ui: Optional[TerminalUI] = None
+        ui: Optional[TerminalUI] = None,
+        config=None,
+        usage_store: Optional[UsageStore] = None
     ):
         """
         Initialize the orchestrator.
@@ -45,6 +50,10 @@ class TranscriptionOrchestrator:
         self.llm_processor = llm_processor
         self.keyboard_listener = keyboard_listener
         self.ui = ui or TerminalUI()
+        self.config = config
+        self.usage_store = usage_store or (UsageStore() if config is not None else None)
+        self.price_catalog = PriceCatalog()
+        self._event_listeners = []
         
         self._is_running = False
         self._processing_queue = queue.Queue()
@@ -73,6 +82,18 @@ class TranscriptionOrchestrator:
         
         if self.ui:
             self.ui.update_live_status("ready", f"Press {self.keyboard_listener.hotkey.upper()} to record | Ctrl+C to exit")
+        self._emit_event("engine_status", {"status": "ready", "engine_running": True})
+
+    def add_event_listener(self, listener: Callable[[str, dict], None]) -> None:
+        if listener not in self._event_listeners:
+            self._event_listeners.append(listener)
+
+    def _emit_event(self, event_type: str, data: dict) -> None:
+        for listener in list(self._event_listeners):
+            try:
+                listener(event_type, data)
+            except Exception as exc:
+                print(f"Event listener error: {exc}")
     
     def _on_hotkey_press(self):
         """Handle hotkey press."""
@@ -106,8 +127,10 @@ class TranscriptionOrchestrator:
     def _process_audio(self, audio_data: bytes):
         """Process audio data through the pipeline."""
         try:
-            import time
             from core.implementations.audio.sounddevice_input import calculate_rms
+            request_id = uuid.uuid4().hex
+            start_time = time.perf_counter()
+            audio_seconds = audio_duration_seconds(audio_data)
 
             # Check RMS Noise Gate threshold
             silence_threshold = 0.005
@@ -122,7 +145,7 @@ class TranscriptionOrchestrator:
                     self.ui.update_live_status("ready", hotkey_msg)
                 return
 
-            start_time = time.perf_counter()
+            self._emit_event("status_changed", {"status": "transcribing", "request_id": request_id})
 
             # Transcribe
             if self.ui:
@@ -134,12 +157,15 @@ class TranscriptionOrchestrator:
             if not text:
                 if self.ui:
                     self.ui.update_live_status("error", "Transcription failed")
+                self._record_usage(request_id, "transcription", self.transcriber, "error", start_time, audio_seconds, "empty_result")
+                self._emit_event("error", {"request_id": request_id, "stage": "transcription", "message": "Transcrição vazia"})
                 return
             
             # Process with LLM if available
             if self.llm_processor:
                 if self.ui:
                     self.ui.update_live_status("llm")
+                self._emit_event("status_changed", {"status": "llm", "request_id": request_id})
                 
                 enhanced_text = self.llm_processor.process(text)
                 
@@ -153,6 +179,18 @@ class TranscriptionOrchestrator:
                 self.ui.show_result(text, raw_text=raw_text if self.llm_processor else None, latency_ms=latency_ms)
             
             self.output_handler.output(text)
+
+            self._record_usage(request_id, "transcription", self.transcriber, "success", start_time, audio_seconds)
+            if self.llm_processor:
+                self._record_usage(request_id, "llm", self.llm_processor, "success", start_time, audio_seconds)
+            self._emit_event("transcription_result", {
+                "request_id": request_id,
+                "raw_text": raw_text,
+                "text": text,
+                "latency_ms": latency_ms,
+                "provider": self._component_provider(self.transcriber),
+                "model": self._component_model(self.transcriber),
+            })
             
             if self.ui:
                 hotkey_msg = f"Press {self.keyboard_listener.hotkey.upper()} to record" if (self.keyboard_listener and hasattr(self.keyboard_listener, 'hotkey')) else "Ready"
@@ -163,6 +201,41 @@ class TranscriptionOrchestrator:
                 self.ui.show_error(f"Audio processing error: {e}")
                 hotkey_msg = f"Press {self.keyboard_listener.hotkey.upper()} to record" if (self.keyboard_listener and hasattr(self.keyboard_listener, 'hotkey')) else "Ready"
                 self.ui.update_live_status("ready", hotkey_msg)
+            self._emit_event("error", {"stage": "processing", "message": str(e)})
+
+    @staticmethod
+    def _component_model(component) -> str:
+        return getattr(component, "active_model", None) or getattr(component, "model", None) or component.__class__.__name__
+
+    @staticmethod
+    def _component_provider(component) -> str:
+        config = getattr(component, "config", None)
+        return getattr(config, "provider", None) or str(TranscriptionOrchestrator._component_model(component)).split("/", 1)[0]
+
+    def _record_usage(self, request_id, operation, component, status, start_time, audio_seconds, error_code=None):
+        if not self.usage_store:
+            return
+        usage = getattr(component, "last_usage", {}) or {}
+        model = self._component_model(component)
+        cost = usage.get("cost")
+        price_source = "provider_response" if cost is not None else "unknown"
+        if operation == "transcription" and cost is None:
+            cost, price_source = self.price_catalog.estimate_transcription(model, audio_seconds)
+        self.usage_store.record(UsageRecord(
+            request_id=request_id,
+            operation=operation,
+            provider=self._component_provider(component),
+            model=model,
+            status=status,
+            latency_ms=(time.perf_counter() - start_time) * 1000.0,
+            audio_seconds=audio_seconds if operation == "transcription" else None,
+            input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"),
+            estimated_cost_usd=cost,
+            price_source=price_source,
+            fallback_used=getattr(component, "_fallback_count", 0) > 0,
+            error_code=error_code,
+        ))
     
     def stop(self):
         """Stop the orchestrator."""
@@ -185,6 +258,7 @@ class TranscriptionOrchestrator:
             self._processing_thread.join(timeout=2.0)
         
         print("\nOrchestrator stopped.")
+        self._emit_event("engine_status", {"status": "stopped", "engine_running": False})
     
     def process_file(self, file_path: str) -> None:
         """

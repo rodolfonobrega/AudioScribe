@@ -8,6 +8,7 @@ from typing import Optional, List, Dict
 
 from core.interfaces.llm_processor import AbstractLLMProcessor
 from core.utils.error_handler import should_retry, should_fallback, retry_with_backoff
+from core.usage import extract_usage, response_cost
 
 
 class LiteLLMProcessor(AbstractLLMProcessor):
@@ -36,6 +37,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
         # Statistics tracking
         self._model_usage = {model: 0 for model in self.model_chain}
         self._fallback_count = 0
+        self.last_usage = {"input_tokens": None, "output_tokens": None, "cost": None}
 
         if not self.model_chain:
             raise ValueError("At least one model must be configured.")
@@ -128,6 +130,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
 
         # Call litellm directly (blocking call)
         response = self.litellm.completion(**kwargs)
+        self.last_usage = {**extract_usage(response), "cost": response_cost(response)}
 
         # Extract text from response
         if hasattr(response, 'choices'):

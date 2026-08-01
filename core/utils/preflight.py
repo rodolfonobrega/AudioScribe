@@ -70,26 +70,26 @@ class PreflightChecker:
         openai_key = os.getenv("OPENAI_API_KEY")
         litellm_key = os.getenv("LITELLM_API_KEY")
         
-        # Check if transcription or LLM config uses API key
         if self.config:
             trans_key = getattr(self.config.transcription, 'api_key', None)
             trans_base_url = getattr(self.config.transcription, 'base_url', None) or os.getenv('TRANSCRIPTION_BASE_URL')
-            llm_key = getattr(self.config.llm, 'api_key', None) if self.config.llm else None
-            
-            # If base_url is set (local server like Ollama), API key is optional
+            llm = getattr(self.config, 'llm', None)
+            llm_key = getattr(llm, 'api_key', None) if llm else None
+            llm_base_url = getattr(llm, 'base_url', None) if llm else None
+            llm_enabled = bool(llm and getattr(llm, 'enabled', True))
+
             if not trans_base_url and not trans_key and not groq_key and not openai_key and not litellm_key:
                 self.errors.append({
-                    "component": "API Keys / Provedor",
-                    "issue": "Nenhuma chave de API (GROQ_API_KEY / OPENAI_API_KEY) ou servidor local configurado.",
-                    "remediation": (
-                        "💡 RECOMENDAÇÃO (GROQ - 100% Gratuito e Ultra-Rápido):\n"
-                        "   1. Acesse: https://console.groq.com/keys\n"
-                        "   2. Crie uma chave gratuita e adicione ao arquivo .env:\n"
-                        "      GROQ_API_KEY=gsk_...\n\n"
-                        "💡 OTHER OPTIONS:\n"
-                        "   • OpenAI: Add `OPENAI_API_KEY=sk-...` to your .env\n"
-                        "   • Local Server (Ollama/Localhost): Set `TRANSCRIPTION_BASE_URL=\"http://localhost:11434/v1\"`"
-                    )
+                    "component": "API Keys / Transcrição",
+                    "issue": "A transcrição não possui chave de API nem endpoint local configurado.",
+                    "remediation": "Configure GROQ_API_KEY, OPENAI_API_KEY ou um endpoint de speech-to-text local."
+                })
+
+            if llm_enabled and not llm_base_url and not llm_key and not groq_key and not openai_key and not litellm_key:
+                self.errors.append({
+                    "component": "API Keys / LLM",
+                    "issue": "O pós-processamento LLM está ativo, mas não possui chave ou endpoint configurado.",
+                    "remediation": "Configure LLM_API_KEY/GROQ_API_KEY ou desative o pós-processamento."
                 })
         else:
             keys_found = any([groq_key, openai_key, litellm_key])

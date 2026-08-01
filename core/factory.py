@@ -8,6 +8,7 @@ from typing import Optional
 
 from config.settings import Config
 from core.implementations.transcription.litellm_transcriber import LiteLLMTranscriber
+from core.implementations.audio.sounddevice_input import SoundDeviceInput
 from core.implementations.transcription.groq_transcriber import GroqTranscriber
 from core.implementations.llm.litellm_processor import LiteLLMProcessor
 from core.implementations.transcription.fallback_transcriber import FallbackTranscriber
@@ -20,6 +21,7 @@ from core.implementations.output.output_handlers import (
     AppleScriptOutputHandler,
     XdotoolOutputHandler
 )
+from core.implementations.output.composite import CompositeOutputHandler
 from core.implementations.keyboard.keyboard_listener import KeyboardListener
 from core.orchestrator import TranscriptionOrchestrator
 
@@ -179,15 +181,15 @@ class TranscriptionFactory:
         if llm_processor is None and config.llm.enabled:
             llm_processor = TranscriptionFactory.create_llm_processor(config)
         
-        # Output handler - use first one if multiple
+        # Keep all configured output handlers behind one composite handler.
         output_handler = None
         if output_handlers is None:
             handlers = TranscriptionFactory.create_output_handlers(config)
-            output_handler = handlers[0] if handlers else None
+            output_handler = CompositeOutputHandler(handlers) if handlers else None
         elif isinstance(output_handlers, list) and len(output_handlers) > 0:
-            output_handler = output_handlers[0]
+            output_handler = CompositeOutputHandler(output_handlers)
         
-        if keyboard_listener is None:
+        if keyboard_listener is None and config.keyboard.enabled:
             keyboard_listener = TranscriptionFactory.create_keyboard_listener(config)
         
         return TranscriptionOrchestrator(
@@ -196,7 +198,8 @@ class TranscriptionFactory:
             llm_processor=llm_processor,
             output_handler=output_handler,
             keyboard_listener=keyboard_listener,
-            ui=ui
+            ui=ui,
+            config=config
         )
 
 

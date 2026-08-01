@@ -11,6 +11,8 @@ from typing import Optional, List, Dict
 
 from core.interfaces.transcriber import AbstractTranscriber
 from core.utils.error_handler import should_retry, should_fallback, retry_with_backoff
+from core.model_discovery import discover_models
+from core.usage import extract_usage, response_cost
 
 try:
     import litellm
@@ -50,6 +52,7 @@ class LiteLLMTranscriber(AbstractTranscriber):
         # Statistics tracking
         self._model_usage = {model: 0 for model in self.model_chain}
         self._fallback_count = 0
+        self.last_usage = {"input_tokens": None, "output_tokens": None, "cost": None}
 
         if not self.model_chain:
             raise ValueError("At least one model must be configured for transcription.")
@@ -154,6 +157,7 @@ class LiteLLMTranscriber(AbstractTranscriber):
                 kwargs['language'] = self.language
 
             response = self.litellm.transcription(**kwargs)
+            self.last_usage = {**extract_usage(response), "cost": response_cost(response)}
 
         if isinstance(response, dict):
             return response.get('text', '')
@@ -166,6 +170,11 @@ class LiteLLMTranscriber(AbstractTranscriber):
     def supports_streaming(self) -> bool:
         """Streaming transcription support."""
         return False
+
+    def list_models(self):
+        """Discover models from the configured endpoint when possible."""
+        provider = str(getattr(self.config, "provider", "litellm"))
+        return discover_models(self.base_url, self.api_key, provider)
 
     def health_check(self) -> None:
         """Validate models at startup."""

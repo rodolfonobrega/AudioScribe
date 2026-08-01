@@ -4,6 +4,7 @@ Handles YAML configs, environment variables, and CLI overrides.
 """
 
 import os
+import re
 from typing import Optional, List
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -152,7 +153,11 @@ def load_config(path: Optional[str] = None, use_env: bool = False, **kwargs) -> 
                 elif isinstance(item, list):
                     return [substitute_env_vars(i) for i in item]
                 elif isinstance(item, str):
-                    # Use os.path.expandvars to handle ${VAR}
+                    # Never allow an unresolved secret placeholder to become a
+                    # truthy credential such as "${GROQ_API_KEY}".
+                    match = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", item.strip())
+                    if match:
+                        return os.getenv(match.group(1)) or None
                     return os.path.expandvars(item)
                 else:
                     return item
@@ -192,9 +197,14 @@ def load_config(path: Optional[str] = None, use_env: bool = False, **kwargs) -> 
             'TRANSCRIPTION_MAX_RETRIES', str(config.transcription.max_retries)))
         config.transcription.retry_delay = float(os.getenv(
             'TRANSCRIPTION_RETRY_DELAY', str(config.transcription.retry_delay)))
-        config.transcription.api_key = os.getenv(
-            'TRANSCRIPTION_API_KEY', config.transcription.api_key) or os.getenv('GROQ_API_KEY')
-        config.transcription.base_url = os.getenv('TRANSCRIPTION_BASE_URL', config.transcription.base_url)
+        config.transcription.api_key = (
+            os.getenv('TRANSCRIPTION_API_KEY')
+            or config.transcription.api_key
+            or os.getenv('GROQ_API_KEY')
+            or os.getenv('OPENAI_API_KEY')
+            or os.getenv('LITELLM_API_KEY')
+        )
+        config.transcription.base_url = os.getenv('TRANSCRIPTION_BASE_URL') or config.transcription.base_url
         config.transcription.language = os.getenv('TRANSCRIPTION_LANGUAGE', config.transcription.language)
 
         # LLM settings
@@ -209,8 +219,16 @@ def load_config(path: Optional[str] = None, use_env: bool = False, **kwargs) -> 
                 config.llm.model = llm_model
             config.llm.max_retries = int(os.getenv('LLM_MAX_RETRIES', str(config.llm.max_retries)))
             config.llm.retry_delay = float(os.getenv('LLM_RETRY_DELAY', str(config.llm.retry_delay)))
-            config.llm.api_key = os.getenv('LLM_API_KEY', config.llm.api_key) or os.getenv('LITELLM_API_KEY')
-            config.llm.base_url = os.getenv('LLM_BASE_URL', config.llm.base_url)
+            config.llm.api_key = (
+                os.getenv('LLM_API_KEY')
+                or config.llm.api_key
+                or os.getenv('GROQ_API_KEY')
+                or os.getenv('OPENAI_API_KEY')
+                or os.getenv('ANTHROPIC_API_KEY')
+                or os.getenv('GOOGLE_API_KEY')
+                or os.getenv('LITELLM_API_KEY')
+            )
+            config.llm.base_url = os.getenv('LLM_BASE_URL') or config.llm.base_url
 
         # Keyboard settings
         config.keyboard.hotkey = os.getenv('KEYBOARD_HOTKEY', config.keyboard.hotkey)
