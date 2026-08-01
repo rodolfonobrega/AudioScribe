@@ -51,6 +51,46 @@ Proprietary apps like **Whisper Flow** or **Superwhisper** are great—until you
 
 ---
 
+## 🧠 The Power of Context-Aware LLM Post-Processing
+
+Raw speech-to-text transcriptions are often filled with stuttering, "ums", phonetic misspellings, and broken grammar. **AudioScribe's built-in LLM Engine turns messy spoken audio into polished, publication-ready text in milliseconds.**
+
+### 1. 🌐 Real-Time Cross-Language Translation
+*Speak naturally in your native language (e.g. Portuguese, Spanish, French) and receive pristine, professional English text ready to paste into Slack or Email.*
+
+| **Spoken Audio (Raw Input)** | **AudioScribe LLM Output** |
+| :--- | :--- |
+| *"cara fala pra ele que a reunião de amanhã foi mudada pras três da tarde porque o cliente atrasou o voo"* | **"Please inform him that tomorrow's meeting has been rescheduled to 3:00 PM due to a delay in the client's flight."** |
+
+---
+
+### 2. 📝 Messy Rant ➔ Polished Executive / Developer Communication
+*Eliminate filler words ("um", "ah", "like"), informal slang, and disorganized pauses automatically.*
+
+| **Spoken Audio (Raw Input)** | **AudioScribe LLM Output** |
+| :--- | :--- |
+| *"ehhh então a gente precisa arrumar o bug na rota de login né... ahn porque tá dando erro quinhentos quando o usuário não passa o token... aí precisa colocar um try catch lá"* | **"We need to fix the issue on the login endpoint. Currently, a 500 Internal Server Error occurs when the authentication token is missing. Please implement proper try-catch error handling."** |
+
+---
+
+### 3. 🛠️ Phonetic Technical Terms & Jargon Correction
+*Standard speech engines butcher technical terms. AudioScribe understands developer context and fixes jargon instantly.*
+
+| **Spoken Audio (Raw Input)** | **AudioScribe LLM Output** |
+| :--- | :--- |
+| *"subir o container no cubo netis com a imagem do post grees e conectar na api em g r p c"* | **"Deploy the container to Kubernetes using the PostgreSQL image and connect via the gRPC API."** |
+
+---
+
+### 🎨 Fully Customizable Prompt Recipes
+Customizing AudioScribe's behavior is as simple as editing `config/defaults.yaml`:
+
+- **Email Assistant Mode**: *"Convert spoken voice into formal business emails."*
+- **Code Docstrings Mode**: *"Format dictation directly as JSDoc or Python docstrings."*
+- **Meeting Bullet Points Mode**: *"Summarize spoken thoughts into concise action items."*
+
+---
+
 ## 🚀 Get Started in 60 Seconds
 
 ### Option 1: Download the Pre-Compiled Desktop App (Easiest)
