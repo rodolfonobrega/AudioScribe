@@ -95,12 +95,12 @@ Customizing AudioScribe's behavior is as simple as editing `config/defaults.yaml
 
 ### Option 1: Download the Pre-Compiled Desktop App (Easiest)
 
-1. Go to **[GitHub Releases](https://github.com/rodolfonobrega/AudioScribe/releases)**.
-2. Download the installer for your OS:
-   - 🪟 **Windows**: `AudioScribe-Setup-1.0.0.exe`
-   - 🍏 **macOS**: `AudioScribe-1.0.0.dmg`
-   - 🐧 **Linux**: `AudioScribe-1.0.0.AppImage`
-3. Get your **free API key** at **[console.groq.com/keys](https://console.groq.com/keys)**, paste it into the app, and press **F9** to dictate!
+1. Download the latest installer for your OS:
+   - 🪟 **[Windows (.exe Installer)](https://github.com/rodolfonobrega/AudioScribe/releases/latest)**
+   - 🍏 **[macOS (.dmg Package)](https://github.com/rodolfonobrega/AudioScribe/releases/latest)**
+   - 🐧 **[Linux (.AppImage Package)](https://github.com/rodolfonobrega/AudioScribe/releases/latest)**
+   - 📦 View all binaries on the **[Latest GitHub Release Page](https://github.com/rodolfonobrega/AudioScribe/releases/latest)**.
+2. Get your **free API key** at **[console.groq.com/keys](https://console.groq.com/keys)**, paste it into the app, and press **F9** to dictate!
 
 ---
 
