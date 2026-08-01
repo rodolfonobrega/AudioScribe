@@ -157,13 +157,11 @@ class UsageStore:
                    FROM usage_records """ + where,
                 params,
             ).fetchone()
-            by_model = db.execute(
-                "SELECT provider, model, COUNT(*) AS requests,
+            by_model_query = """SELECT provider, model, COUNT(*) AS requests,
                           SUM(estimated_cost_usd) AS estimated_cost_usd
-                   FROM usage_records " + where + " GROUP BY provider, model
-                   ORDER BY requests DESC",
-                params,
-            ).fetchall()
+                   FROM usage_records """ + where + """ GROUP BY provider, model
+                   ORDER BY requests DESC"""
+            by_model = db.execute(by_model_query, params).fetchall()
         result = dict(row)
         result["cost_known"] = result["estimated_cost_usd"] is not None
         result["by_model"] = [dict(item) for item in by_model]
