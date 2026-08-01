@@ -1,209 +1,140 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="pt-BR" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AudioScribe Desktop</title>
+    <meta name="color-scheme" content="dark light">
+    <title>AudioScribe</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!--
+      THESIS: AudioScribe is a quiet desktop operations desk, not an AI dashboard; it replaces decorative cards with clear states and one deliberate action.
+      OWN-WORLD: ink-dark surfaces, warm paper text, hairline dividers, muted amber signal, and compact system typography.
+      STORY: the user sees whether the engine is ready, starts dictating, and reads the latest text without leaving the task.
+      FIRST VIEWPORT: rail navigation at left, status at top, recording control in the first column, and recent transcriptions below it.
+      FORM: grounded direction 5, a broadcast cue-sheet / operations desk translated into a calm desktop utility; seed key 2e3d53fc.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->
     <div class="app-window">
-        <!-- Top Navigation Header -->
         <header class="app-header">
             <div class="brand">
-                <span class="brand-icon">🎙️</span>
-                <span class="brand-name">AudioScribe</span>
-                <span class="version-badge">v1.0.0</span>
+                <span class="brand-mark" aria-hidden="true">AS</span>
+                <div class="brand-copy">
+                    <span class="brand-name">AudioScribe</span>
+                    <span class="brand-context">Desktop dictation</span>
+                </div>
             </div>
 
             <div class="header-actions">
-                <!-- Theme Toggle Button -->
-                <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Light/Dark Theme">
-                    <span id="theme-icon">🌙</span>
-                    <span id="theme-label">Dark</span>
+                <span class="app-version">v1.0.0</span>
+                <button class="theme-toggle-btn" id="theme-toggle-btn" type="button" title="Alternar tema">
+                    <span id="theme-icon" aria-hidden="true"></span>
+                    <span id="theme-label">Tema escuro</span>
                 </button>
             </div>
         </header>
 
-        <!-- System Health Pre-flight Status Banner -->
-        <div class="system-status-bar" id="system-status-bar">
-            <span class="status-indicator" id="status-indicator"></span>
-            <span class="status-msg" id="status-msg">Checking system pre-flight status...</span>
+        <div class="system-status-bar" id="system-status-bar" role="status" aria-live="polite">
+            <span class="status-indicator" id="status-indicator" aria-hidden="true"></span>
+            <span class="status-msg" id="status-msg">Verificando o sistema...</span>
         </div>
 
-        <!-- Main Workspace Grid -->
         <main class="main-content">
-            <!-- Sidebar Navigation Tabs -->
-            <nav class="tab-sidebar">
-                <button class="nav-btn active" data-tab="dictate">
-                    <span class="nav-icon">🎙️</span> Dictate
-                </button>
-                <button class="nav-btn" data-tab="profiles">
-                    <span class="nav-icon">🔮</span> Post-Processing
-                </button>
-                <button class="nav-btn" data-tab="settings">
-                    <span class="nav-icon">⚙️</span> Settings
-                </button>
-                <button class="nav-btn" data-tab="diagnostics">
-                    <span class="nav-icon">🔍</span> Pre-flight
-                </button>
-            </nav>
+            <aside class="tab-sidebar" aria-label="Navegação principal">
+                <div class="sidebar-label">Workspace</div>
+                <nav class="sidebar-nav">
+                    <button class="nav-btn active" data-tab="dictate" type="button">
+                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V6a3.5 3.5 0 0 0-7 0v5a3.5 3.5 0 0 0 3.5 3.5Z"/><path d="M5 10.5a7 7 0 0 0 14 0M12 17.5V21M8.5 21h7"/></svg>
+                        <span>Gravar</span>
+                    </button>
+                    <button class="nav-btn" data-tab="profiles" type="button">
+                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5z"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>
+                        <span>Perfis</span>
+                    </button>
+                    <button class="nav-btn" data-tab="settings" type="button">
+                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19 13.5 1.2 1-.9 1.6-1.5-.5a7.3 7.3 0 0 1-1.6 1l-.2 1.6h-1.8l-.6-1.5a7.4 7.4 0 0 1-1.9 0l-.6 1.5h-1.8l-.2-1.6a7.3 7.3 0 0 1-1.6-1l-1.5.5-.9-1.6 1.2-1a7.5 7.5 0 0 1 0-2l-1.2-1 .9-1.6 1.5.5a7.3 7.3 0 0 1 1.6-1l.2-1.6h1.8l.6 1.5a7.4 7.4 0 0 1 1.9 0l.6-1.5H16l.2 1.6a7.3 7.3 0 0 1 1.6 1l1.5-.5.9 1.6-1.2 1a7.5 7.5 0 0 1 0 2Z"/></svg>
+                        <span>Configuração</span>
+                    </button>
+                    <button class="nav-btn" data-tab="diagnostics" type="button">
+                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12h3l1.5-5 3 10 1.5-5h6"/><path d="M4 4.5h16v15H4z"/></svg>
+                        <span>Diagnóstico</span>
+                    </button>
+                </nav>
 
-            <!-- Content Area -->
+                <div class="sidebar-footer">
+                    <span class="footer-rule"></span>
+                    <span>Atalho global</span>
+                    <kbd id="sidebar-hotkey">F9</kbd>
+                </div>
+            </aside>
+
             <section class="tab-body">
-                
-                <!-- TAB 1: DICTATE -->
                 <div class="tab-content active" id="tab-dictate">
-                    <!-- Productivity Metrics Grid -->
-                    <div class="metrics-grid">
-                        <div class="metric-card">
-                            <span class="metric-icon">📝</span>
-                            <div class="metric-info">
-                                <span class="metric-value" id="metric-words">0</span>
-                                <span class="metric-label">Words Dictated</span>
-                            </div>
+                    <div class="page-heading">
+                        <div>
+                            <p class="eyebrow">Workspace / Gravar</p>
+                            <h1>Ditado</h1>
+                            <p class="page-description">Fale naturalmente. O texto aparece aqui e é enviado para a janela ativa.</p>
                         </div>
-                        <div class="metric-card">
-                            <span class="metric-icon">⏱️</span>
-                            <div class="metric-info">
-                                <span class="metric-value" id="metric-time-saved">0 min</span>
-                                <span class="metric-label">Time Saved</span>
+                        <div class="heading-status"><span class="status-dot"></span><span>Pronto</span></div>
+                    </div>
+
+                    <div class="record-layout">
+                        <section class="record-card" aria-labelledby="record-heading">
+                            <div class="record-card-topline"><span id="record-heading">Estação de gravação</span><span class="record-id">LIVE / 01</span></div>
+                            <div class="record-center">
+                                <div class="record-orbit" aria-hidden="true"><span class="pulse-ring"></span><span class="mic-icon"><svg viewBox="0 0 24 24"><path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V6a3.5 3.5 0 0 0-7 0v5a3.5 3.5 0 0 0 3.5 3.5Z"/><path d="M5 10.5a7 7 0 0 0 14 0M12 17.5V21M8.5 21h7"/></svg></span></div>
+                                <p class="record-state" id="record-btn-label">Iniciar gravação</p>
+                                <button class="record-btn" id="record-toggle-btn" type="button"><span id="record-action-label">Começar a falar</span><span class="record-arrow" aria-hidden="true">↗</span></button>
                             </div>
-                        </div>
-                        <div class="metric-card">
-                            <span class="metric-icon">⚡</span>
-                            <div class="metric-info">
-                                <span class="metric-value" id="metric-latency">0 ms</span>
-                                <span class="metric-label">Avg Latency</span>
-                            </div>
+                            <div class="hotkey-display"><span>ou use o atalho</span><kbd id="active-hotkey-badge">F9</kbd></div>
+                        </section>
+
+                        <div class="metrics-grid" aria-label="Métricas de uso">
+                            <div class="metric-card"><span class="metric-label">Palavras ditadas</span><strong class="metric-value" id="metric-words">0</strong></div>
+                            <div class="metric-card"><span class="metric-label">Tempo poupado</span><strong class="metric-value" id="metric-time-saved">0 min</strong></div>
+                            <div class="metric-card"><span class="metric-label">Latência média</span><strong class="metric-value" id="metric-latency">0 ms</strong></div>
                         </div>
                     </div>
 
-                    <!-- Main Recording Control Card -->
-                    <div class="card record-card">
-                        <button class="record-btn" id="record-toggle-btn">
-                            <span class="pulse-ring"></span>
-                            <span class="mic-icon">🎙️</span>
-                            <span class="btn-text" id="record-btn-label">Start Recording</span>
-                        </button>
-                        
-                        <div class="hotkey-display">
-                            <span>Shortcut:</span>
-                            <kbd id="active-hotkey-badge">F9</kbd>
-                        </div>
-                    </div>
-
-                    <!-- Pre-flight Warning Card (Hidden by default) -->
                     <div class="warning-card hidden" id="preflight-warning-card">
-                        <div class="warning-header">
-                            <span>⚠️ Pre-flight Check Failed</span>
-                        </div>
-                        <p id="preflight-warning-text">Missing Groq API Key. Please enter your API Key in Settings.</p>
-                        <button class="btn-primary-sm" id="fix-config-btn">Go to Settings</button>
+                        <div class="warning-header"><span class="warning-mark">!</span><span>Configuração necessária</span></div>
+                        <p id="preflight-warning-text">Uma chave de API é necessária para iniciar.</p>
+                        <button class="btn-primary-sm" id="fix-config-btn" type="button">Abrir configuração</button>
                     </div>
 
-                    <!-- History / Transcriptions Card -->
-                    <div class="card history-card">
-                        <div class="card-header">
-                            <h3>Live Transcriptions</h3>
-                            <button class="btn-text-only" id="clear-history-btn">Clear History</button>
-                        </div>
+                    <section class="card history-card" aria-labelledby="history-heading">
+                        <div class="card-header"><div><p class="eyebrow">Registro recente</p><h2 id="history-heading">Transcrições</h2></div><button class="btn-text-only" id="clear-history-btn" type="button">Limpar registro</button></div>
                         <div class="transcription-list" id="transcription-list">
-                            <div class="empty-state" id="empty-history-state">
-                                <p>Press <strong>F9</strong> anywhere on your computer to start dictating.</p>
-                            </div>
+                            <div class="empty-state" id="empty-history-state"><span class="empty-line"></span><p>Suas transcrições aparecerão aqui.</p><small>Pressione <kbd>F9</kbd> em qualquer janela para começar.</small></div>
                         </div>
-                    </div>
+                    </section>
                 </div>
 
-                <!-- TAB 2: POST-PROCESSING PROFILES & HOTKEYS -->
                 <div class="tab-content" id="tab-profiles">
-                    <div class="card settings-card">
-                        <div class="card-header">
-                            <div>
-                                <h3>Post-Processing Profiles & Dedicated Hotkeys</h3>
-                                <p class="section-desc">Create custom LLM prompt rules and assign dedicated global hotkeys for instant execution anywhere on your computer.</p>
-                            </div>
-                            <button class="btn-primary-sm" id="add-profile-btn">+ New Profile</button>
-                        </div>
-
-                        <!-- Profile List Container -->
-                        <div class="profiles-list" id="profiles-list">
-                            <!-- Dynamically populated by app.js -->
-                        </div>
-                    </div>
+                    <div class="page-heading compact"><div><p class="eyebrow">Workspace / Perfis</p><h1>Perfis de pós-processamento</h1><p class="page-description">Regras prontas para transformar uma transcrição em texto final.</p></div><button class="btn-primary" id="add-profile-btn" type="button">Novo perfil <span aria-hidden="true">+</span></button></div>
+                    <div class="card settings-card"><div class="section-intro"><span class="section-index">01</span><div><h2>Perfis ativos</h2><p class="section-desc">Cada perfil pode ter uma instrução e um atalho dedicado.</p></div></div><div class="profiles-list" id="profiles-list"></div></div>
                 </div>
 
-                <!-- TAB 3: SETTINGS -->
                 <div class="tab-content" id="tab-settings">
-                    <div class="card settings-card">
-                        <h3>Configuration</h3>
-
-                        <!-- AI Provider Dropdown -->
-                        <div class="form-group">
-                            <label for="provider-select">AI Provider / Engine</label>
-                            <select id="provider-select">
-                                <option value="groq">⚡ Groq (Recommended - Free & Instant)</option>
-                                <option value="openai">🤖 OpenAI (Whisper & GPT-4o)</option>
-                                <option value="ollama">💻 Localhost / Ollama (100% Offline, Private & Free)</option>
-                                <option value="custom">🔧 Custom OpenAI-Compatible Endpoint</option>
-                            </select>
-                        </div>
-
-                        <!-- API Key Field -->
-                        <div class="form-group" id="api-key-group">
-                            <label for="api-key-input" id="api-key-label">API Key</label>
-                            <input type="password" id="api-key-input" placeholder="gsk_..." autocomplete="off">
-                            <span class="input-hint" id="api-key-hint">Get a free instant key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></span>
-                        </div>
-
-                        <!-- Custom Base URL Field (Hidden by default) -->
-                        <div class="form-group hidden" id="base-url-group">
-                            <label for="base-url-input">Base API URL</label>
-                            <input type="text" id="base-url-input" placeholder="http://localhost:11434/v1">
-                        </div>
-
-                        <!-- Interactive Hotkey Recorder -->
-                        <div class="form-group">
-                            <label for="hotkey-recorder">Global Shortcut Key</label>
-                            <div class="hotkey-recorder-box">
-                                <input type="text" id="hotkey-recorder-input" value="F9" readonly placeholder="Click to record hotkey...">
-                                <button class="btn-secondary" id="record-hotkey-btn">Record Hotkey</button>
-                            </div>
-                            <span class="input-hint">Click the button above and press your preferred hotkey (e.g. F9, Ctrl+Shift+Space, Alt+R).</span>
-                        </div>
-
-                        <!-- Microphone Device Selector -->
-                        <div class="form-group">
-                            <label for="audio-device-select">Microphone Input</label>
-                            <select id="audio-device-select">
-                                <option value="">Auto / Default Microphone</option>
-                            </select>
-                        </div>
-
-                        <button class="btn-primary" id="save-settings-btn">Save Settings</button>
+                    <div class="page-heading compact"><div><p class="eyebrow">Workspace / Configuração</p><h1>Configuração</h1><p class="page-description">Conecte o mecanismo de transcrição e escolha como iniciar o ditado.</p></div></div>
+                    <div class="card settings-card"><div class="section-intro"><span class="section-index">01</span><div><h2>Motor de transcrição</h2><p class="section-desc">As credenciais ficam salvas apenas neste dispositivo.</p></div></div>
+                        <div class="form-grid"><div class="form-group"><label for="provider-select">Provedor</label><select id="provider-select"><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="ollama">Ollama local</option><option value="custom">Endpoint compatível</option></select></div><div class="form-group" id="api-key-group"><label for="api-key-input" id="api-key-label">Chave da API</label><input type="password" id="api-key-input" placeholder="gsk_..." autocomplete="off"><span class="input-hint" id="api-key-hint">Chave usada pelo provedor escolhido.</span></div></div>
+                        <div class="form-group hidden" id="base-url-group"><label for="base-url-input">URL base</label><input type="text" id="base-url-input" placeholder="http://localhost:11434/v1"></div>
+                        <div class="setting-divider"></div><div class="section-intro"><span class="section-index">02</span><div><h2>Atalhos e entrada</h2><p class="section-desc">Inicie a gravação sem interromper seu fluxo.</p></div></div>
+                        <div class="form-grid"><div class="form-group"><label for="hotkey-recorder-input">Atalho global</label><div class="hotkey-recorder-box"><input type="text" id="hotkey-recorder-input" value="F9" readonly placeholder="Clique para gravar"><button class="btn-secondary" id="record-hotkey-btn" type="button">Gravar atalho</button></div><span class="input-hint">Use uma combinação que não esteja ocupada por outro aplicativo.</span></div><div class="form-group"><label for="audio-device-select">Microfone</label><select id="audio-device-select"><option value="">Padrão do sistema</option></select><span class="input-hint">O dispositivo de entrada usado pelo AudioScribe.</span></div></div>
+                        <div class="form-actions"><button class="btn-primary" id="save-settings-btn" type="button">Salvar configuração</button><span class="save-note">As alterações entram em vigor imediatamente.</span></div>
                     </div>
                 </div>
 
-                <!-- TAB 3: DIAGNOSTICS -->
                 <div class="tab-content" id="tab-diagnostics">
-                    <div class="card diagnostics-card">
-                        <h3>System Pre-flight Diagnostics</h3>
-                        <p class="section-desc">Verifies microphone hardware, API connectivity, and OS permissions.</p>
-
-                        <button class="btn-primary" id="run-preflight-btn">Run Pre-flight Diagnostic Check</button>
-
-                        <div class="diag-output-box" id="diag-results">
-                            <p class="placeholder-text">Click "Run Pre-flight Diagnostic Check" to start testing.</p>
-                        </div>
-                    </div>
+                    <div class="page-heading compact"><div><p class="eyebrow">Workspace / Diagnóstico</p><h1>Diagnóstico</h1><p class="page-description">Confira microfone, permissões e conexão antes de gravar.</p></div></div>
+                    <div class="card diagnostics-card"><div class="section-intro"><span class="section-index">01</span><div><h2>Verificação do sistema</h2><p class="section-desc">Uma leitura rápida dos componentes necessários para o ditado.</p></div></div><button class="btn-primary" id="run-preflight-btn" type="button">Executar verificação</button><div class="diag-output-box" id="diag-results"><p class="placeholder-text">O resultado da verificação aparecerá aqui.</p></div></div>
                 </div>
-
             </section>
         </main>
     </div>
-
     <script src="app.js"></script>
 </body>
 </html>
