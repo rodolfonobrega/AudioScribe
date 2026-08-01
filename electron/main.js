@@ -85,10 +85,28 @@ function createMainWindow() {
         mainWindow.show();
     });
 
+    let hasShownTrayNotification = false;
+
     mainWindow.on('close', (event) => {
         if (!app.isQuitting) {
             event.preventDefault();
             mainWindow.hide();
+
+            if (!hasShownTrayNotification) {
+                hasShownTrayNotification = true;
+                const { Notification } = require('electron');
+                if (tray && tray.displayBalloon) {
+                    tray.displayBalloon({
+                        title: 'AudioScribe está rodando em segundo plano',
+                        content: 'AudioScribe continua ativo! Pressione o atalho (F9) a qualquer momento. Para encerrar, clique com o botão direito no ícone da bandeja.'
+                    });
+                } else if (Notification.isSupported()) {
+                    new Notification({
+                        title: 'AudioScribe rodando em segundo plano 🎙️',
+                        body: 'O AudioScribe continua ativo! Pressione F9 para ditar ou clique com o botão direito no ícone da bandeja para sair.'
+                    }).show();
+                }
+            }
         }
         return false;
     });
