@@ -235,6 +235,148 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- 5. POST-PROCESSING PROFILES & DEDICATED HOTKEYS MANAGER ---
+    const defaultProfiles = [
+        {
+            id: 'prof_std',
+            name: '📝 Standard Grammar & Polish',
+            enabled: true,
+            shortcut: 'F9',
+            prompt: 'Fix grammar, punctuation, and speech errors while preserving exact meaning. Output ONLY polished text.'
+        },
+        {
+            id: 'prof_trans',
+            name: '🌐 Translate to English',
+            enabled: true,
+            shortcut: 'Ctrl+Shift+E',
+            prompt: 'Translate the transcribed audio into natural, professional English. Output ONLY the translated text.'
+        },
+        {
+            id: 'prof_summary',
+            name: '📋 Bullet Point Summary',
+            enabled: true,
+            shortcut: 'Ctrl+Shift+S',
+            prompt: 'Summarize the spoken audio into clean, structured markdown bullet points.'
+        },
+        {
+            id: 'prof_code',
+            name: '💻 Code & Technical Formatter',
+            enabled: true,
+            shortcut: 'Ctrl+Shift+C',
+            prompt: 'Format code snippets, technical explanations, and variable names cleanly in markdown.'
+        }
+    ];
+
+    let profiles = JSON.parse(localStorage.getItem('audioscribe_profiles') || 'null') || defaultProfiles;
+    const profilesListEl = document.getElementById('profiles-list');
+    const addProfileBtn = document.getElementById('add-profile-btn');
+
+    function saveProfiles() {
+        localStorage.setItem('audioscribe_profiles', JSON.stringify(profiles));
+        if (window.api && window.api.updateProfiles) {
+            window.api.updateProfiles(profiles);
+        }
+    }
+
+    saveProfiles();
+
+    function renderProfiles() {
+        if (!profilesListEl) return;
+        profilesListEl.innerHTML = '';
+
+        profiles.forEach(prof => {
+            const card = document.createElement('div');
+            card.className = 'profile-card';
+            card.innerHTML = `
+                <div class="profile-header-row">
+                    <div class="profile-title-group">
+                        <input type="checkbox" ${prof.enabled ? 'checked' : ''} data-id="${prof.id}" class="profile-enable-check">
+                        <span class="profile-title">${prof.name}</span>
+                    </div>
+                    <button class="btn-danger-sm delete-prof-btn" data-id="${prof.id}">Delete</button>
+                </div>
+                <div class="form-group">
+                    <label>System Prompt Rule</label>
+                    <textarea class="profile-prompt-preview" data-id="${prof.id}" rows="2">${prof.prompt}</textarea>
+                </div>
+                <div class="profile-actions-row">
+                    <div class="profile-hotkey-group">
+                        <span>Dedicated Shortcut:</span>
+                        <kbd class="hotkey-badge">${prof.shortcut || 'None'}</kbd>
+                        <button class="btn-secondary record-prof-shortcut-btn" data-id="${prof.id}">Change Shortcut</button>
+                    </div>
+                    <button class="btn-primary-sm save-prof-btn" data-id="${prof.id}">Save & Apply</button>
+                </div>
+            `;
+            profilesListEl.appendChild(card);
+        });
+
+        // Add Event Listeners for inline editing
+        profilesListEl.querySelectorAll('.save-prof-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.getAttribute('data-id');
+                const prof = profiles.find(p => p.id === id);
+                if (prof) {
+                    const card = e.target.closest('.profile-card');
+                    const promptArea = card.querySelector('.profile-prompt-preview');
+                    const check = card.querySelector('.profile-enable-check');
+                    prof.prompt = promptArea.value.trim();
+                    prof.enabled = check.checked;
+                    saveProfiles();
+                    alert(`Saved profile "${prof.name}"! Shortcut: ${prof.shortcut}`);
+                }
+            });
+        });
+
+        profilesListEl.querySelectorAll('.delete-prof-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.getAttribute('data-id');
+                if (confirm('Are you sure you want to delete this post-processing profile?')) {
+                    profiles = profiles.filter(p => p.id !== id);
+                    saveProfiles();
+                    renderProfiles();
+                }
+            });
+        });
+
+        profilesListEl.querySelectorAll('.record-prof-shortcut-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.getAttribute('data-id');
+                const prof = profiles.find(p => p.id === id);
+                if (!prof) return;
+
+                const newKey = prompt(`Enter new hotkey combination for "${prof.name}":\n(e.g., Ctrl+Shift+E, Alt+R, F9)`, prof.shortcut);
+                if (newKey && newKey.trim()) {
+                    prof.shortcut = newKey.trim();
+                    saveProfiles();
+                    renderProfiles();
+                }
+            });
+        });
+    }
+
+    renderProfiles();
+
+    if (addProfileBtn) {
+        addProfileBtn.addEventListener('click', () => {
+            const name = prompt('Enter a name for your new Post-Processing Profile:', '✨ Custom Rule');
+            if (!name) return;
+            const promptText = prompt('Enter the System Prompt instruction for the AI:', 'Translate and clean up text...');
+            if (!promptText) return;
+
+            const newProf = {
+                id: 'prof_' + Date.now(),
+                name: name.trim(),
+                enabled: true,
+                shortcut: 'Ctrl+Alt+' + (profiles.length + 1),
+                prompt: promptText.trim()
+            };
+            profiles.push(newProf);
+            saveProfiles();
+            renderProfiles();
+        });
+    }
+
     // --- 5. PRODUCTIVITY STATS TRACKING ---
     const metricWordsEl = document.getElementById('metric-words');
     const metricTimeSavedEl = document.getElementById('metric-time-saved');

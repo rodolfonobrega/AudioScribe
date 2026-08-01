@@ -285,6 +285,41 @@ app.whenReady().then(() => {
     });
 });
 
+let activeProfiles = [];
+
+function registerProfileShortcuts(profiles) {
+    activeProfiles = profiles || [];
+    globalShortcut.unregisterAll();
+    let successCount = 0;
+    const registered = [];
+
+    activeProfiles.forEach(profile => {
+        if (!profile.shortcut || !profile.enabled) return;
+        try {
+            const ok = globalShortcut.register(profile.shortcut, () => {
+                toggleRecording(profile);
+            });
+            if (ok) {
+                successCount++;
+                registered.push(profile.shortcut);
+            }
+        } catch (e) {
+            console.error(`Failed to register shortcut ${profile.shortcut} for profile ${profile.name}:`, e);
+        }
+    });
+
+    // Fallback default F9 if nothing registered
+    if (registered.length === 0) {
+        globalShortcut.register('F9', () => toggleRecording());
+    }
+
+    return { status: 'ok', count: successCount, registered };
+}
+
+ipcMain.handle('update-profiles', async (event, profiles) => {
+    return registerProfileShortcuts(profiles);
+});
+
 ipcMain.handle('register-shortcut', async (event, key) => {
     return registerShortcut(key);
 });

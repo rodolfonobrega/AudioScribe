@@ -39,6 +39,9 @@
                 <button class="nav-btn active" data-tab="dictate">
                     <span class="nav-icon">🎙️</span> Dictate
                 </button>
+                <button class="nav-btn" data-tab="profiles">
+                    <span class="nav-icon">🔮</span> Post-Processing
+                </button>
                 <button class="nav-btn" data-tab="settings">
                     <span class="nav-icon">⚙️</span> Settings
                 </button>
@@ -114,7 +117,25 @@
                     </div>
                 </div>
 
-                <!-- TAB 2: SETTINGS -->
+                <!-- TAB 2: POST-PROCESSING PROFILES & HOTKEYS -->
+                <div class="tab-content" id="tab-profiles">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <div>
+                                <h3>Post-Processing Profiles & Dedicated Hotkeys</h3>
+                                <p class="section-desc">Create custom LLM prompt rules and assign dedicated global hotkeys for instant execution anywhere on your computer.</p>
+                            </div>
+                            <button class="btn-primary-sm" id="add-profile-btn">+ New Profile</button>
+                        </div>
+
+                        <!-- Profile List Container -->
+                        <div class="profiles-list" id="profiles-list">
+                            <!-- Dynamically populated by app.js -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: SETTINGS -->
                 <div class="tab-content" id="tab-settings">
                     <div class="card settings-card">
                         <h3>Configuration</h3>
