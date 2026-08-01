@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import threading
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from core.orchestrator import TranscriptionOrchestrator
@@ -114,7 +115,16 @@ class AudioScribeServer:
 
         if command == "get_usage":
             store = getattr(self.orchestrator, "usage_store", None) if self.orchestrator else None
-            return {"status": "ok", "summary": store.summary() if store else {"requests": 0, "cost_known": False, "by_model": []}}
+            if not store:
+                empty = {"requests": 0, "cost_known": False, "by_model": []}
+                return {"status": "ok", "summary": empty, "periods": {"today": empty, "month": empty}}
+            now = datetime.now(timezone.utc)
+            day_start = now.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+            return {"status": "ok", "summary": store.summary(), "periods": {
+                "today": store.summary(day_start),
+                "month": store.summary(month_start),
+            }}
 
         if command == "preflight":
             return await self._preflight(deep=bool(params.get("deep")))

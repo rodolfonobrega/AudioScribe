@@ -143,21 +143,26 @@ class UsageStore:
                 ),
             )
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self, since: Optional[str] = None) -> Dict[str, Any]:
+        where = "WHERE created_at >= ?" if since else ""
+        params = (since,) if since else ()
         with self._connect() as db:
             row = db.execute(
                 """SELECT COUNT(*) AS requests,
                           COALESCE(SUM(audio_seconds), 0) AS audio_seconds,
                           COALESCE(SUM(input_tokens), 0) AS input_tokens,
                           COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                          SUM(CASE WHEN estimated_cost_usd IS NULL THEN 1 ELSE 0 END) AS unknown_cost_records,
                           SUM(estimated_cost_usd) AS estimated_cost_usd
-                   FROM usage_records"""
+                   FROM usage_records """ + where,
+                params,
             ).fetchone()
             by_model = db.execute(
                 """SELECT provider, model, COUNT(*) AS requests,
                           SUM(estimated_cost_usd) AS estimated_cost_usd
-                   FROM usage_records GROUP BY provider, model
-                   ORDER BY requests DESC"""
+                   FROM usage_records """ + where + " GROUP BY provider, model
+                   ORDER BY requests DESC""",
+                params,
             ).fetchall()
         result = dict(row)
         result["cost_known"] = result["estimated_cost_usd"] is not None

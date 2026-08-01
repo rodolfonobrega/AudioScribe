@@ -304,6 +304,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const summary = result?.summary;
         if (!summary) return;
         $('metric-cost').textContent = summary.cost_known ? `$${Number(summary.estimated_cost_usd).toFixed(4)}` : 'Unknown';
+        const periods = result.periods || {};
+        const formatCost = (item) => item?.cost_known ? `$${Number(item.estimated_cost_usd).toFixed(4)}` : 'Unknown';
+        $('metric-cost-today').textContent = formatCost(periods.today);
+        $('metric-cost-month').textContent = formatCost(periods.month);
+        $('metric-cost-unknown').textContent = String(summary.unknown_cost_records || 0);
     };
     const recordMetric = (text, latency) => {
         if (!text) return;

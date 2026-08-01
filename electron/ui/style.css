@@ -179,6 +179,8 @@ select { appearance: auto; }
 .diag-error { color: var(--danger); }
 
 .profiles-list { display: flex; flex-direction: column; gap: 10px; }
+.usage-breakdown { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 10px; color: var(--text-dim); font-size: 11px; }
+.usage-breakdown strong { color: var(--text); font-weight: 650; }
 .profile-card { padding: 16px; border: 1px solid var(--line); background: var(--surface-soft); }
 .profile-header-row { justify-content: space-between; gap: 15px; margin-bottom: 15px; }
 .profile-title-group { gap: 10px; }
