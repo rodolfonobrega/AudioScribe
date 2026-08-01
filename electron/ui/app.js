@@ -47,23 +47,73 @@ document.addEventListener('DOMContentLoaded', () => {
     const warningCard = document.getElementById('preflight-warning-card');
     const warningText = document.getElementById('preflight-warning-text');
     const fixConfigBtn = document.getElementById('fix-config-btn');
+    
+    const providerSelect = document.getElementById('provider-select');
+    const apiKeyGroup = document.getElementById('api-key-group');
     const apiKeyInput = document.getElementById('api-key-input');
+    const apiKeyLabel = document.getElementById('api-key-label');
+    const apiKeyHint = document.getElementById('api-key-hint');
+    const baseUrlGroup = document.getElementById('base-url-group');
+    const baseUrlInput = document.getElementById('base-url-input');
 
-    // Load saved API Key
+    // Load saved Provider settings
+    const savedProvider = localStorage.getItem('audioscribe_provider') || 'groq';
     const savedApiKey = localStorage.getItem('audioscribe_api_key') || '';
+    const savedBaseUrl = localStorage.getItem('audioscribe_base_url') || 'http://localhost:11434/v1';
+
+    providerSelect.value = savedProvider;
     apiKeyInput.value = savedApiKey;
+    baseUrlInput.value = savedBaseUrl;
+
+    function handleProviderUIChange() {
+        const val = providerSelect.value;
+        if (val === 'ollama') {
+            apiKeyGroup.classList.add('hidden');
+            baseUrlGroup.classList.remove('hidden');
+            baseUrlInput.value = 'http://localhost:11434/v1';
+        } else if (val === 'custom') {
+            apiKeyGroup.classList.remove('hidden');
+            baseUrlGroup.classList.remove('hidden');
+            apiKeyLabel.textContent = 'API Key (Optional for Local)';
+            apiKeyHint.textContent = 'Optional if your local custom endpoint does not require authentication.';
+        } else if (val === 'openai') {
+            apiKeyGroup.classList.remove('hidden');
+            baseUrlGroup.classList.add('hidden');
+            apiKeyLabel.textContent = 'OpenAI API Key';
+            apiKeyHint.textContent = 'Get key at platform.openai.com/api-keys';
+        } else { // groq
+            apiKeyGroup.classList.remove('hidden');
+            baseUrlGroup.classList.add('hidden');
+            apiKeyLabel.textContent = 'Groq API Key (Free)';
+            apiKeyHint.textContent = 'Get a free instant key at console.groq.com/keys';
+        }
+    }
+
+    providerSelect.addEventListener('change', () => {
+        handleProviderUIChange();
+        runPreflightCheck();
+    });
+
+    handleProviderUIChange();
 
     function runPreflightCheck() {
+        const provider = providerSelect.value;
         const apiKey = apiKeyInput.value.trim();
-        if (!apiKey) {
+        const baseUrl = baseUrlInput.value.trim();
+
+        const isLocal = provider === 'ollama' || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+
+        if (!isLocal && !apiKey) {
+            const providerName = provider === 'openai' ? 'OpenAI' : 'Groq';
             statusBar.className = 'system-status-bar error';
-            statusMsg.textContent = '🔴 Action Needed: Groq API Key Missing';
-            warningText.textContent = 'Missing Groq API Key. Please enter your API Key in Settings to start dictating.';
+            statusMsg.textContent = `🔴 Action Needed: ${providerName} API Key Missing`;
+            warningText.textContent = `Missing ${providerName} API Key. Please enter your key in Settings or switch to Localhost Ollama.`;
             warningCard.classList.remove('hidden');
             return false;
         } else {
             statusBar.className = 'system-status-bar';
-            statusMsg.textContent = '🟢 All Systems Operational • Press F9 to Dictate';
+            const label = isLocal ? 'Localhost Ollama' : (provider === 'openai' ? 'OpenAI API' : 'Groq API');
+            statusMsg.textContent = `🟢 ${label} Operational • Press F9 to Dictate`;
             warningCard.classList.add('hidden');
             return true;
         }
@@ -79,7 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Save Settings
     const saveSettingsBtn = document.getElementById('save-settings-btn');
     saveSettingsBtn.addEventListener('click', () => {
+        localStorage.setItem('audioscribe_provider', providerSelect.value);
         localStorage.setItem('audioscribe_api_key', apiKeyInput.value.trim());
+        localStorage.setItem('audioscribe_base_url', baseUrlInput.value.trim());
         runPreflightCheck();
         alert('Settings saved successfully!');
     });

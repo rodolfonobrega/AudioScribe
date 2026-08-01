@@ -8,29 +8,37 @@ const path = require('path');
 
 class NativeTranscriber {
     constructor(config = {}) {
-        this.apiKey = config.apiKey || process.env.GROQ_API_KEY;
-        this.baseUrl = config.baseUrl || 'https://api.groq.com/openai/v1';
-        this.model = config.model || 'whisper-large-v3-turbo';
-        this.llmModel = config.llmModel || 'meta-llama/llama-4-maverick-17b-128e-instruct';
+        this.provider = config.provider || 'groq';
+        this.apiKey = config.apiKey || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
+        this.baseUrl = config.baseUrl || (this.provider === 'openai' ? 'https://api.openai.com/v1' : (this.provider === 'ollama' ? 'http://localhost:11434/v1' : 'https://api.groq.com/openai/v1'));
+        this.model = config.model || (this.provider === 'openai' ? 'whisper-1' : (this.provider === 'ollama' ? 'whisper' : 'whisper-large-v3-turbo'));
+        this.llmModel = config.llmModel || (this.provider === 'openai' ? 'gpt-4o-mini' : (this.provider === 'ollama' ? 'llama3' : 'meta-llama/llama-4-maverick-17b-128e-instruct'));
     }
 
-    validatePreflight(apiKeyOverride = null) {
-        const keyToTest = apiKeyOverride || this.apiKey || process.env.GROQ_API_KEY;
+    validatePreflight(apiKeyOverride = null, providerOverride = null, baseUrlOverride = null) {
+        const provider = providerOverride || this.provider;
+        const baseUrl = baseUrlOverride || this.baseUrl;
+        const keyToTest = apiKeyOverride || this.apiKey;
+        const isLocal = provider === 'ollama' || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+
         const errors = [];
 
-        if (!keyToTest && !this.baseUrl.includes('localhost')) {
-            errors.push("Missing Groq API Key. Please enter your API key (starts with gsk_...) in Settings.");
+        if (!isLocal && !keyToTest) {
+            const name = provider === 'openai' ? 'OpenAI' : 'Groq';
+            errors.push(`Missing ${name} API Key. Please enter your API key in Settings or switch to Localhost Ollama.`);
         }
 
         return {
             valid: errors.length === 0,
+            isLocal: isLocal,
             errors: errors
         };
     }
 
     async transcribe(audioBuffer) {
-        if (!this.apiKey && !this.baseUrl.includes('localhost')) {
-            throw new Error("GROQ_API_KEY is missing. Please enter your API key in Settings.");
+        const isLocal = this.provider === 'ollama' || this.baseUrl.includes('localhost') || this.baseUrl.includes('127.0.0.1');
+        if (!isLocal && !this.apiKey) {
+            throw new Error(`API Key is missing for ${this.provider}. Please enter your key in Settings.`);
         }
 
         const formData = new FormData();

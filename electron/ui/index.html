@@ -119,11 +119,28 @@
                     <div class="card settings-card">
                         <h3>Configuration</h3>
 
-                        <!-- API Key Field -->
+                        <!-- AI Provider Dropdown -->
                         <div class="form-group">
-                            <label for="api-key-input">Groq API Key (Free)</label>
+                            <label for="provider-select">AI Provider / Engine</label>
+                            <select id="provider-select">
+                                <option value="groq">⚡ Groq (Recommended - Free & Instant)</option>
+                                <option value="openai">🤖 OpenAI (Whisper & GPT-4o)</option>
+                                <option value="ollama">💻 Localhost / Ollama (100% Offline, Private & Free)</option>
+                                <option value="custom">🔧 Custom OpenAI-Compatible Endpoint</option>
+                            </select>
+                        </div>
+
+                        <!-- API Key Field -->
+                        <div class="form-group" id="api-key-group">
+                            <label for="api-key-input" id="api-key-label">API Key</label>
                             <input type="password" id="api-key-input" placeholder="gsk_..." autocomplete="off">
-                            <span class="input-hint">Get a free instant key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></span>
+                            <span class="input-hint" id="api-key-hint">Get a free instant key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></span>
+                        </div>
+
+                        <!-- Custom Base URL Field (Hidden by default) -->
+                        <div class="form-group hidden" id="base-url-group">
+                            <label for="base-url-input">Base API URL</label>
+                            <input type="text" id="base-url-input" placeholder="http://localhost:11434/v1">
                         </div>
 
                         <!-- Interactive Hotkey Recorder -->
