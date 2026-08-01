@@ -1,6 +1,6 @@
 {
   "name": "audioscribe-desktop",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "AudioScribe Desktop - Cross-platform Speech-to-Text with AI",
   "main": "main.js",
   "scripts": {
@@ -36,13 +36,6 @@
     "directories": {
       "output": "dist"
     },
-    "extraResources": [
-      {
-        "from": "bin/",
-        "to": "bin/",
-        "filter": ["*"]
-      }
-    ],
     "win": {
       "target": "nsis"
     },

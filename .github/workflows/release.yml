@@ -1,4 +1,4 @@
-name: Build and Publish Releases
+name: Release AudioScribe Desktop
 
 on:
   push:
@@ -10,73 +10,41 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build ${{ matrix.os }} Binaries
+  release:
+    name: Build & Publish ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            artifact_name: AudioScribe-Setup.exe
             build_cmd: npm run build:win
           - os: macos-latest
-            artifact_name: AudioScribe.dmg
             build_cmd: npm run build:mac
           - os: ubuntu-latest
-            artifact_name: AudioScribe.AppImage
             build_cmd: npm run build:linux
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'electron/package-lock.json'
+          node-version: 20
 
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Build Python Engine with PyInstaller
-        run: |
-          pyinstaller --onefile --name audioscribe_engine --hidden-import=sounddevice --hidden-import=pynput --hidden-import=litellm --hidden-import=yaml --hidden-import=pyperclip --hidden-import=pyautogui main.py
-
-      - name: Install Electron Dependencies
+      - name: Install dependencies
         run: |
           cd electron
           npm install
 
-      - name: Copy Python Engine Binary to Electron Resources
-        shell: bash
-        run: |
-          mkdir -p electron/bin
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp dist/audioscribe_engine.exe electron/bin/
-          else
-            cp dist/audioscribe_engine electron/bin/
-            chmod +x electron/bin/audioscribe_engine
-          fi
-
-      - name: Build Desktop Application (electron-builder)
+      - name: Build Electron Desktop App
         run: |
           cd electron
           ${{ matrix.build_cmd }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish Binaries to GitHub Release
+      - name: Upload Binaries to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:

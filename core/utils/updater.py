@@ -7,7 +7,7 @@ import json
 import urllib.request
 from typing import Dict, Any, Optional
 
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.1.1"
 GITHUB_REPO = "rodolfonobrega/AudioScribe"
 
 
