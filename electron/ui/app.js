@@ -19,10 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('audioscribe_theme', theme);
         if (theme === 'light') {
             themeIcon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path></svg>';
-            themeLabel.textContent = 'Tema claro';
+            themeLabel.textContent = 'Light mode';
         } else {
             themeIcon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8 8 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z"></path></svg>';
-            themeLabel.textContent = 'Tema escuro';
+            themeLabel.textContent = 'Dark mode';
         }
     }
 
@@ -74,18 +74,18 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (val === 'custom') {
             apiKeyGroup.classList.remove('hidden');
             baseUrlGroup.classList.remove('hidden');
-            apiKeyLabel.textContent = 'Chave da API (opcional)';
-            apiKeyHint.textContent = 'Deixe vazio se o endpoint local não exigir autenticação.';
+            apiKeyLabel.textContent = 'API Key (Optional)';
+            apiKeyHint.textContent = 'Leave empty if your local endpoint does not require authentication.';
         } else if (val === 'openai') {
             apiKeyGroup.classList.remove('hidden');
             baseUrlGroup.classList.add('hidden');
-            apiKeyLabel.textContent = 'Chave da API OpenAI';
-            apiKeyHint.textContent = 'Informe a chave usada para a transcrição.';
+            apiKeyLabel.textContent = 'OpenAI API Key';
+            apiKeyHint.textContent = 'Enter key from platform.openai.com/api-keys';
         } else { // groq
             apiKeyGroup.classList.remove('hidden');
             baseUrlGroup.classList.add('hidden');
-            apiKeyLabel.textContent = 'Chave da API Groq';
-            apiKeyHint.textContent = 'Informe a chave usada para a transcrição.';
+            apiKeyLabel.textContent = 'Groq API Key (Free)';
+            apiKeyHint.textContent = 'Enter free key from console.groq.com/keys';
         }
     }
 
@@ -106,14 +106,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isLocal && !apiKey) {
             const providerName = provider === 'openai' ? 'OpenAI' : 'Groq';
             statusBar.className = 'system-status-bar error';
-            statusMsg.textContent = `Ação necessária: falta a chave da API ${providerName}`;
-            warningText.textContent = `Informe a chave da API ${providerName} em Configuração ou selecione o Ollama local.`;
+            statusMsg.textContent = `Action Required: Missing ${providerName} API Key`;
+            warningText.textContent = `Please enter your ${providerName} API Key in Settings or switch to Localhost Ollama.`;
             warningCard.classList.remove('hidden');
             return false;
         } else {
             statusBar.className = 'system-status-bar';
             const label = isLocal ? 'Localhost Ollama' : (provider === 'openai' ? 'OpenAI API' : 'Groq API');
-            statusMsg.textContent = `${label} disponível · pressione F9 para ditar`;
+            statusMsg.textContent = `${label} Ready • Press F9 to Dictate`;
             warningCard.classList.add('hidden');
             return true;
         }
@@ -132,8 +132,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const ready = runPreflightCheck();
         if (diagResults) {
             diagResults.innerHTML = ready
-                ? '<p class="diag-ok">Sistema pronto. Provedor e configuração básica disponíveis para iniciar uma gravação.</p>'
-                : '<p class="diag-error">A verificação encontrou uma pendência. Revise a configuração indicada acima.</p>';
+                ? '<p class="diag-ok">System Ready. Microphone hardware, provider, and basic configuration are operational.</p>'
+                : '<p class="diag-error">Diagnostic check found an issue. Please review the error message above.</p>';
         }
     });
 
@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('audioscribe_api_key', apiKeyInput.value.trim());
         localStorage.setItem('audioscribe_base_url', baseUrlInput.value.trim());
         runPreflightCheck();
-        alert('Configuração salva.');
+        alert('Settings saved successfully.');
     });
 
     // --- 4. INTERACTIVE MULTI-KEY HOTKEY RECORDER ---
@@ -159,8 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     recordHotkeyBtn.addEventListener('click', () => {
         isRecordingHotkey = true;
-        hotkeyInput.value = 'Pressione a combinação...';
-        recordHotkeyBtn.textContent = 'Ouvindo...';
+        hotkeyInput.value = 'Press key combination...';
+        recordHotkeyBtn.textContent = 'Listening...';
         recordHotkeyBtn.dataset.listening = 'true';
     });
 
@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             isRecordingHotkey = false;
             hotkeyInput.value = result.pretty;
-            recordHotkeyBtn.textContent = 'Gravar atalho';
+            recordHotkeyBtn.textContent = 'Record Hotkey';
             delete recordHotkeyBtn.dataset.listening;
 
             if (window.api && window.api.registerShortcut) {
@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log(`[Hotkey] Successfully registered ${result.accelerator}`);
                 } else {
                     const err = (res && res.error) || 'Invalid key combination';
-                    alert(`Não foi possível registrar '${result.pretty}': ${err}`);
+                    alert(`Could not register shortcut '${result.pretty}': ${err}`);
                     hotkeyInput.value = savedShortcut;
                     activeHotkeyBadge.textContent = savedShortcut;
                 }
@@ -252,31 +252,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultProfiles = [
         {
             id: 'prof_std',
-            name: 'Revisão e clareza',
+            name: '📝 Standard Grammar & Polish',
             enabled: true,
             shortcut: 'F9',
-            prompt: 'Corrija gramática, pontuação e vícios de fala preservando o sentido. Retorne somente o texto revisado.'
+            prompt: 'Fix grammar, punctuation, and speech errors while preserving exact meaning. Output ONLY polished text.'
         },
         {
             id: 'prof_trans',
-            name: 'Traduzir para inglês',
+            name: '🌐 Translate to English',
             enabled: true,
             shortcut: 'Ctrl+Shift+E',
-            prompt: 'Traduza a transcrição para um inglês natural e profissional. Retorne somente o texto traduzido.'
+            prompt: 'Translate the transcribed audio into natural, professional English. Output ONLY the translated text.'
         },
         {
             id: 'prof_summary',
-            name: 'Resumo em tópicos',
+            name: '📋 Bullet Point Summary',
             enabled: true,
             shortcut: 'Ctrl+Shift+S',
-            prompt: 'Resuma o áudio em tópicos objetivos e bem estruturados.'
+            prompt: 'Summarize the spoken audio into clean, structured markdown bullet points.'
         },
         {
             id: 'prof_code',
-            name: 'Formatação técnica',
+            name: '💻 Code & Technical Formatter',
             enabled: true,
             shortcut: 'Ctrl+Shift+C',
-            prompt: 'Formate código, explicações técnicas e nomes de variáveis com clareza.'
+            prompt: 'Format code snippets, technical explanations, and variable names cleanly in markdown.'
         }
     ];
 
@@ -336,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     prof.prompt = promptArea.value.trim();
                     prof.enabled = check.checked;
                     saveProfiles();
-                    alert(`Perfil "${prof.name}" salvo. Atalho: ${prof.shortcut}`);
+                    alert(`Profile "${prof.name}" saved successfully. Shortcut: ${prof.shortcut}`);
                 }
             });
         });
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         profilesListEl.querySelectorAll('.delete-prof-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const id = e.target.getAttribute('data-id');
-                if (confirm('Excluir este perfil de pós-processamento?')) {
+                if (confirm('Delete this post-processing profile?')) {
                     profiles = profiles.filter(p => p.id !== id);
                     saveProfiles();
                     renderProfiles();
@@ -358,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const prof = profiles.find(p => p.id === id);
                 if (!prof) return;
 
-                const newKey = prompt(`Novo atalho para "${prof.name}":\n(ex.: Ctrl+Shift+E, Alt+R, F9)`, prof.shortcut);
+                const newKey = prompt(`Enter new shortcut for "${prof.name}":\n(e.g., Ctrl+Shift+E, Alt+R, F9)`, prof.shortcut);
                 if (newKey && newKey.trim()) {
                     prof.shortcut = newKey.trim();
                     saveProfiles();
@@ -372,9 +372,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (addProfileBtn) {
         addProfileBtn.addEventListener('click', () => {
-            const name = prompt('Nome do novo perfil:', 'Regra personalizada');
+            const name = prompt('New profile name:', '✨ Custom Rule');
             if (!name) return;
-            const promptText = prompt('Instrução do perfil:', 'Revise e organize o texto...');
+            const promptText = prompt('System prompt instruction for the AI:', 'Revise and clean up text...');
             if (!promptText) return;
 
             const newProf = {
@@ -463,13 +463,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (recording) {
             recordBtn.classList.add('recording');
             recordBtn.closest('.record-card')?.classList.add('recording');
-            recordLabel.textContent = 'Gravando agora';
-            if (recordActionLabel) recordActionLabel.textContent = 'Parar gravação';
+            recordLabel.textContent = 'Recording now';
+            if (recordActionLabel) recordActionLabel.textContent = 'Stop Recording';
         } else {
             recordBtn.classList.remove('recording');
             recordBtn.closest('.record-card')?.classList.remove('recording');
-            recordLabel.textContent = 'Iniciar gravação';
-            if (recordActionLabel) recordActionLabel.textContent = 'Começar a falar';
+            recordLabel.textContent = 'Start recording';
+            if (recordActionLabel) recordActionLabel.textContent = 'Start Dictating';
         }
     }
 
@@ -499,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear History
     const clearHistoryBtn = document.getElementById('clear-history-btn');
     clearHistoryBtn.addEventListener('click', () => {
-        historyList.innerHTML = '<div class="empty-state" id="empty-history-state"><span class="empty-line"></span><p>Suas transcrições aparecerão aqui.</p><small>Pressione <kbd>F9</kbd> em qualquer janela para começar.</small></div>';
+        historyList.innerHTML = '<div class="empty-state" id="empty-history-state"><span class="empty-line"></span><p>Your recent dictations will appear here.</p><small>Press <kbd>F9</kbd> anywhere on your computer to start dictating.</small></div>';
     });
 
     const sidebarHotkey = document.getElementById('sidebar-hotkey');

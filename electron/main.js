@@ -66,10 +66,10 @@ function setupAutoUpdater() {
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
-        width: 800,
-        height: 620,
-        minWidth: 600,
-        minHeight: 500,
+        width: 920,
+        height: 700,
+        minWidth: 750,
+        minHeight: 560,
         show: false,
         title: "AudioScribe Desktop",
         webPreferences: {
@@ -97,13 +97,13 @@ function createMainWindow() {
                 const { Notification } = require('electron');
                 if (tray && tray.displayBalloon) {
                     tray.displayBalloon({
-                        title: 'AudioScribe está rodando em segundo plano',
-                        content: 'AudioScribe continua ativo! Pressione o atalho (F9) a qualquer momento. Para encerrar, clique com o botão direito no ícone da bandeja.'
+                        title: 'AudioScribe is running in background',
+                        content: 'AudioScribe is still active! Press your shortcut (e.g. F9) anytime to dictate. Right-click tray icon to quit.'
                     });
                 } else if (Notification.isSupported()) {
                     new Notification({
-                        title: 'AudioScribe rodando em segundo plano 🎙️',
-                        body: 'O AudioScribe continua ativo! Pressione F9 para ditar ou clique com o botão direito no ícone da bandeja para sair.'
+                        title: 'AudioScribe Active in Tray 🎙️',
+                        body: 'AudioScribe is running in the background. Press your shortcut to dictate anytime or right-click tray icon to quit.'
                     }).show();
                 }
             }
