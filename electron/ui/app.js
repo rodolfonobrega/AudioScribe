@@ -101,6 +101,28 @@ document.addEventListener('DOMContentLoaded', () => {
         historyList.prepend(item);
     }
 
+    // Check for Updates Button
+    const checkUpdatesBtn = document.getElementById('check-updates-btn');
+    const updateMsg = document.getElementById('update-status-msg');
+
+    if (checkUpdatesBtn) {
+        checkUpdatesBtn.addEventListener('click', async () => {
+            if (updateMsg) updateMsg.textContent = 'Checking GitHub for updates...';
+            if (window.api) {
+                const res = await window.api.sendCommand('check_updates');
+                if (res && res.status === 'ok') {
+                    if (res.update_available && res.update_info) {
+                        const info = res.update_info;
+                        updateMsg.innerHTML = `🚀 <strong style="color:#10b981">Update Available! (v${info.latest_version})</strong><br>` +
+                            `<a href="${info.release_url}" target="_blank" style="color:#6366f1">Click here to download release</a>`;
+                    } else {
+                        updateMsg.textContent = '✅ You are on the latest version of AudioScribe (v1.0.0).';
+                    }
+                }
+            }
+        });
+    }
+
     // Preflight Diagnostics Button
     if (runDiagBtn) {
         runDiagBtn.addEventListener('click', async () => {

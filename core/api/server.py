@@ -96,6 +96,16 @@ class AudioScribeServer:
             except Exception as e:
                 return {"status": "error", "error": str(e)}
 
+        elif command == "check_updates":
+            from core.utils.updater import VersionChecker
+            checker = VersionChecker()
+            update = checker.check_for_updates(timeout=3.0)
+            return {
+                "status": "ok",
+                "update_available": update is not None,
+                "update_info": update
+            }
+
         elif command == "preflight":
             checker = PreflightChecker()
             checker.run_all_checks()

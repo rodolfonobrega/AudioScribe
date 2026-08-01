@@ -45,8 +45,24 @@ class PreflightChecker:
         self.check_os_permissions()
         self.check_output_handlers()
         self.check_keyboard_listener()
+        self.check_updates()
 
         return len(self.errors) == 0
+
+    def check_updates(self) -> None:
+        """Check GitHub for new AudioScribe release."""
+        try:
+            from core.utils.updater import VersionChecker
+            checker = VersionChecker()
+            update = checker.check_for_updates(timeout=2.0)
+            if update:
+                self.warnings.append({
+                    "component": "Update Available",
+                    "issue": f"A new version of AudioScribe is available (v{update['latest_version']}). Current version: v{update['current_version']}.",
+                    "remediation": f"Download latest release at {update['release_url']}"
+                })
+        except Exception:
+            pass
 
     def check_api_keys(self) -> None:
         """Check if required API keys are configured."""

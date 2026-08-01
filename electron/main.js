@@ -2,12 +2,39 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut } = require('ele
 const path = require('path');
 const net = require('net');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
 let tray = null;
 let pythonProcess = null;
 let socketClient = null;
 let isRecording = false;
+
+function setupAutoUpdater() {
+    autoUpdater.autoDownload = false;
+
+    autoUpdater.on('update-available', (info) => {
+        if (mainWindow) {
+            mainWindow.webContents.send('engine-event', {
+                event: 'update_status',
+                data: { available: true, info }
+            });
+        }
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        if (mainWindow) {
+            mainWindow.webContents.send('engine-event', {
+                event: 'update_status',
+                data: { available: false }
+            });
+        }
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.error('[AutoUpdater Error]:', err);
+    });
+}
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({

@@ -18,7 +18,9 @@
     "whisper"
   ],
   "author": "AudioScribe Team",
-  "license": "MIT",
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
@@ -26,6 +28,11 @@
   "build": {
     "appId": "com.audioscribe.desktop",
     "productName": "AudioScribe",
+    "publish": {
+      "provider": "github",
+      "owner": "rodolfonobrega",
+      "repo": "AudioScribe"
+    },
     "directories": {
       "output": "dist"
     },
