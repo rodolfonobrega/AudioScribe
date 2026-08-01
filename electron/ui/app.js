@@ -87,13 +87,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const llmProvider = llmProviderSelect.value;
         const transMeta = providerDefaults[transProvider] || providerDefaults.custom;
         const llmMeta = providerDefaults[llmProvider] || providerDefaults.custom;
-        if (transProvider === 'ollama' && !transBaseUrlInput.value) transBaseUrlInput.value = transMeta.transUrl;
-        if (llmProvider === 'ollama' && !llmBaseUrlInput.value) llmBaseUrlInput.value = llmMeta.llmUrl;
-        if (llmProvider === 'openrouter' && !llmBaseUrlInput.value) llmBaseUrlInput.value = llmMeta.llmUrl;
+        if (!transBaseUrlInput.value) transBaseUrlInput.value = transMeta.transUrl || '';
+        if (!llmBaseUrlInput.value) llmBaseUrlInput.value = llmMeta.llmUrl || '';
         $('transcription-api-key-hint').textContent = transMeta.key === 'No key required' ? 'This provider does not require a key.' : 'Encrypted by the desktop process.';
         $('llm-api-key-hint').textContent = llmMeta.key === 'No key required' ? 'This provider does not require a key.' : `${llmMeta.key} is encrypted by the desktop process.`;
         $('transcription-provider-status').textContent = transProvider === 'ollama' ? 'Chat only' : 'Not tested';
         $('llm-provider-status').textContent = 'Not tested';
+    };
+
+    const resetProviderUrl = (kind) => {
+        const provider = kind === 'transcription' ? transProviderSelect.value : llmProviderSelect.value;
+        const meta = providerDefaults[provider] || providerDefaults.custom;
+        const input = kind === 'transcription' ? transBaseUrlInput : llmBaseUrlInput;
+        input.value = (kind === 'transcription' ? meta.transUrl : meta.llmUrl) || '';
+        input.focus();
+    };
+
+    const applyProviderChange = (kind) => {
+        const select = kind === 'transcription' ? transProviderSelect : llmProviderSelect;
+        const input = kind === 'transcription' ? transBaseUrlInput : llmBaseUrlInput;
+        const previousProvider = select.dataset.previousProvider;
+        const previousMeta = providerDefaults[previousProvider] || providerDefaults.custom;
+        const previousDefault = kind === 'transcription' ? previousMeta.transUrl : previousMeta.llmUrl;
+        if (!input.value.trim() || input.value.trim() === (previousDefault || '')) resetProviderUrl(kind);
+        select.dataset.previousProvider = select.value;
+        updateProviderUI();
     };
 
     const addOption = (select, value, label, selected = false) => {
@@ -166,6 +184,8 @@ document.addEventListener('DOMContentLoaded', () => {
             transApiKeyInput.placeholder = 'Stored securely · leave blank to keep';
         }
         updateProviderUI();
+        transProviderSelect.dataset.previousProvider = transProviderSelect.value;
+        llmProviderSelect.dataset.previousProvider = llmProviderSelect.value;
         addOption(transcriptionModelSelect, trans.model || config.transcription_model, trans.model || config.transcription_model, true);
         addOption(llmModelSelect, llm.model || config.llm_model, llm.model || config.llm_model, true);
     };
@@ -173,16 +193,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Migrate the old plaintext renderer secret out of localStorage.
     localStorage.removeItem('audioscribe_api_key');
     transProviderSelect.addEventListener('change', async () => {
-        updateProviderUI();
+        applyProviderChange('transcription');
         await refreshModels();
         await runPreflightCheck();
     });
     llmProviderSelect.addEventListener('change', async () => {
-        updateProviderUI();
+        applyProviderChange('llm');
         await refreshModels();
         await runPreflightCheck();
     });
     updateProviderUI();
+    transProviderSelect.dataset.previousProvider = transProviderSelect.value;
+    llmProviderSelect.dataset.previousProvider = llmProviderSelect.value;
+    $('reset-transcription-url-btn')?.addEventListener('click', () => resetProviderUrl('transcription'));
+    $('reset-llm-url-btn')?.addEventListener('click', () => resetProviderUrl('llm'));
 
     const refreshDevices = async () => {
         const select = $('audio-device-select');
@@ -377,11 +401,18 @@ document.addEventListener('DOMContentLoaded', () => {
         recordBtn.disabled = false;
     });
 
-    api?.onEngineEvent?.((event) => {
+    api?.onEngineEvent?.(async (event) => {
         if (!event) return;
         if (event.event === 'engine_status') {
             warningCard.classList.add('hidden');
             setSystemStatus('', 'Engine connected · checking configuration');
+        } else if (event.event === 'engine_ready') {
+            warningCard.classList.add('hidden');
+            setSystemStatus('', 'Engine ready · loading providers and models');
+            await refreshModels();
+            await refreshDevices();
+            await refreshUsage();
+            await runPreflightCheck();
         } else if (event.event === 'engine_starting') {
             setSystemStatus('', 'Starting AudioScribe engine...');
         } else if (event.event === 'status_changed') {

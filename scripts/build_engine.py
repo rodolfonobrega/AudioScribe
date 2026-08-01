@@ -29,6 +29,12 @@ def main() -> int:
         str(ROOT),
         "--add-data",
         f"{ROOT / 'config'}{separator}config",
+        "--collect-data",
+        "litellm",
+        "--collect-all",
+        "tiktoken",
+        "--hidden-import",
+        "tiktoken_ext.openai_public",
         str(ROOT / "main.py"),
     ]
     subprocess.run(command, cwd=ROOT, check=True)

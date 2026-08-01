@@ -45,6 +45,7 @@ jobs:
           python -m pip install -r requirements-docker.txt pyinstaller
           python -m pytest tests -q
           python -m compileall -q core config main.py
+          python scripts/smoke_engine.py
           python scripts/build_engine.py
 
       - name: Install dependencies

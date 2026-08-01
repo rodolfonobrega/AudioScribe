@@ -134,22 +134,29 @@ class AudioScribeServer:
 
         if command == "start_recording":
             if self.orchestrator and self.orchestrator.audio_input:
-                if self.orchestrator.audio_input.is_recording:
-                    return {"status": "error", "code": "already_recording", "error": "A gravação já está ativa."}
-                self.orchestrator.audio_input.start_recording()
-                await self.broadcast("status_changed", {"status": "recording"})
-                return {"status": "ok", "recording": True}
+                try:
+                    if self.orchestrator.audio_input.is_recording:
+                        return {"status": "error", "code": "already_recording", "error": "A gravação já está ativa."}
+                    self.orchestrator.audio_input.health_check()
+                    self.orchestrator.audio_input.start_recording()
+                    await self.broadcast("status_changed", {"status": "recording"})
+                    return {"status": "ok", "recording": True}
+                except Exception as exc:
+                    return {"status": "error", "code": "audio_not_ready", "error": str(exc), "remediation": "Verifique o microfone e as permissões de áudio em Diagnostics."}
             return {"status": "error", "code": "audio_unavailable", "error": "Entrada de áudio não inicializada."}
 
         if command == "stop_recording":
             if self.orchestrator and self.orchestrator.audio_input:
-                if not self.orchestrator.audio_input.is_recording:
-                    return {"status": "error", "code": "not_recording", "error": "Nenhuma gravação ativa."}
-                audio_bytes = self.orchestrator.audio_input.stop_recording()
-                await self.broadcast("status_changed", {"status": "processing"})
-                if audio_bytes:
-                    self.orchestrator._processing_queue.put(audio_bytes)
-                return {"status": "ok", "recording": False}
+                try:
+                    if not self.orchestrator.audio_input.is_recording:
+                        return {"status": "error", "code": "not_recording", "error": "Nenhuma gravação ativa."}
+                    audio_bytes = self.orchestrator.audio_input.stop_recording()
+                    await self.broadcast("status_changed", {"status": "processing"})
+                    if audio_bytes:
+                        self.orchestrator._processing_queue.put(audio_bytes)
+                    return {"status": "ok", "recording": False}
+                except Exception as exc:
+                    return {"status": "error", "code": "audio_stop_failed", "error": str(exc), "remediation": "Verifique o estado do microfone e tente novamente."}
             return {"status": "error", "code": "audio_unavailable", "error": "Entrada de áudio não inicializada."}
 
         if command == "get_status":

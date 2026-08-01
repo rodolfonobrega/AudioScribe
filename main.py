@@ -27,7 +27,7 @@ def main():
     )
     
     parser.add_argument('--config', type=str, default=None, help='Path to configuration file')
-    parser.add_argument('--output', type=str, choices=['console', 'clipboard', 'pyautogui', 'autoit', 'applescript', 'xdotool'], help='Output handler type')
+    parser.add_argument('--output', type=str, choices=['console', 'stdout', 'clipboard', 'pyautogui', 'autoit', 'applescript', 'xdotool'], help='Output handler type')
     parser.add_argument('--device', type=int, help='Audio input device index')
     parser.add_argument('--no-keyboard', action='store_true', help='Disable keyboard listener')
     parser.add_argument('--file', type=str, help='Process audio file instead of recording')
@@ -44,7 +44,10 @@ def main():
     args = parser.parse_args()
     
     # Create UI
-    ui = TerminalUI()
+    # The Electron sidecar must not write terminal status lines. Apart from
+    # being unnecessary for the desktop UI, TerminalUI uses Unicode glyphs
+    # that can crash on Windows cp1252 consoles before the IPC server starts.
+    ui = TerminalUI(verbose=not args.server)
     
     # Show banner
     ui.show_banner()
@@ -161,7 +164,7 @@ def main():
             from core.api.server import AudioScribeServer
             api_server = AudioScribeServer(orchestrator=orchestrator, port=args.port)
             api_server.run_in_thread()
-            print(f"🚀 AudioScribe IPC Server started on 127.0.0.1:{args.port} for Electron GUI")
+            print(f"AudioScribe IPC server started on 127.0.0.1:{args.port} for Electron GUI")
 
         if args.file:
             orchestrator.process_file(args.file)

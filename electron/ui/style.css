@@ -53,10 +53,13 @@ body {
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.btn-link { padding: 0; border: 0; background: transparent; color: var(--accent-strong); font-size: 11px; }
+.btn-link:hover { text-decoration: underline; }
 
-.app-window { display: flex; flex-direction: column; min-height: 100vh; }
+.app-window { display: flex; flex-direction: column; width: 100%; height: 100vh; min-height: 0; }
 
-.app-header { height: 68px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.app-header { height: 68px; flex: 0 0 68px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .brand, .header-actions, .brand-copy, .theme-toggle-btn, .status-bar, .sidebar-footer, .nav-btn, .page-heading, .heading-status, .card-header, .record-card-topline, .hotkey-display, .warning-header, .section-intro, .form-actions, .profile-header-row, .profile-title-group, .profile-actions-row, .profile-hotkey-group { display: flex; align-items: center; }
 .brand { gap: 11px; }
 .brand-mark { overflow: hidden; width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-soft); }
@@ -70,11 +73,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .theme-toggle-btn:hover { color: var(--text); }
 .theme-toggle-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 
-.system-status-bar { min-height: 34px; display: flex; align-items: center; gap: 9px; padding: 0 28px; background: var(--surface-soft); border-bottom: 1px solid var(--line); color: var(--text-soft); font-size: 12px; }
+.system-status-bar { min-height: 34px; flex: 0 0 34px; display: flex; align-items: center; gap: 9px; padding: 0 28px; background: var(--surface-soft); border-bottom: 1px solid var(--line); color: var(--text-soft); font-size: 12px; }
 .status-indicator, .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 13%, transparent); }
 .system-status-bar.error .status-indicator { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 13%, transparent); }
 
-.main-content { display: flex; min-height: 0; flex: 1; }
+.main-content { display: flex; min-height: 0; height: calc(100vh - 102px); flex: 1 1 auto; }
 .tab-sidebar { width: 218px; flex: 0 0 218px; display: flex; flex-direction: column; padding: 27px 16px 20px; border-right: 1px solid var(--line); background: var(--surface); }
 .sidebar-label { padding: 0 12px 11px; color: var(--text-dim); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
@@ -88,7 +91,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 kbd { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 7px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface-strong); color: var(--text-soft); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; font-weight: 600; }
 .sidebar-footer kbd { color: var(--accent-strong); }
 
-.tab-body { min-width: 0; flex: 1; overflow-y: auto; padding: 42px clamp(28px, 5vw, 72px) 64px; }
+.tab-body { min-width: 0; min-height: 0; flex: 1; overflow-x: hidden; overflow-y: auto; padding: 42px clamp(28px, 5vw, 72px) 64px; scrollbar-gutter: stable; }
 .tab-content { display: none; width: min(100%, 1020px); flex-direction: column; gap: 25px; margin: 0 auto; }
 .tab-content.active { display: flex; }
 .page-heading { align-items: flex-start; justify-content: space-between; gap: 24px; }

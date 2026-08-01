@@ -107,10 +107,10 @@ function setupAutoUpdater() {
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
-        width: 920,
-        height: 700,
-        minWidth: 750,
-        minHeight: 560,
+        width: 1180,
+        height: 820,
+        minWidth: 900,
+        minHeight: 650,
         show: false,
         title: "AudioScribe Desktop",
         webPreferences: {
@@ -186,7 +186,18 @@ function connectToPythonServer() {
     socketClient = net.connect({ port: 8765, host: '127.0.0.1' }, () => {
         console.log('[Electron] Connected to AudioScribe Python Server.');
         publishEngineEvent('engine_status', { code: 'engine_connected', message: 'Engine connected' });
-        sendStoredProviderConfig();
+        sendStoredProviderConfig().then((result) => {
+            if (result?.status === 'ok') {
+                publishEngineEvent('engine_ready', { code: 'engine_ready', message: 'Engine ready for commands' });
+            } else {
+                publishEngineEvent('engine_error', {
+                    code: 'provider_config_failed',
+                    title: 'Provider configuration could not be applied',
+                    message: result?.error || 'The engine connected, but the saved provider configuration was rejected.',
+                    remediation: 'Open Settings, review the providers and click Save Settings.',
+                });
+            }
+        });
     });
 
     socketClient.on('data', (data) => {
@@ -282,7 +293,8 @@ function sendEngineRequest(command, params = {}, timeoutMs = 10000) {
 
 async function sendStoredProviderConfig() {
     const config = loadProviderConfig();
-    if (config) await sendEngineRequest('configure_provider', config);
+    if (config) return sendEngineRequest('configure_provider', config);
+    return { status: 'ok' };
 }
 
 function launchPythonSidecar() {
