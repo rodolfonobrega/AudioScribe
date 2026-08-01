@@ -158,10 +158,10 @@ class UsageStore:
                 params,
             ).fetchone()
             by_model = db.execute(
-                """SELECT provider, model, COUNT(*) AS requests,
+                "SELECT provider, model, COUNT(*) AS requests,
                           SUM(estimated_cost_usd) AS estimated_cost_usd
-                   FROM usage_records """ + where + " GROUP BY provider, model
-                   ORDER BY requests DESC""",
+                   FROM usage_records " + where + " GROUP BY provider, model
+                   ORDER BY requests DESC",
                 params,
             ).fetchall()
         result = dict(row)
