@@ -397,21 +397,43 @@ ipcMain.handle('register-shortcut', async (event, key) => {
 ipcMain.handle('get-provider-config', async () => {
     const config = loadProviderConfig();
     if (!config) return { status: 'ok', config: null };
+    const safeConfig = {
+        ...config,
+        api_key: config.api_key ? 'configured' : '',
+        transcription: config.transcription ? { ...config.transcription, api_key: config.transcription.api_key ? 'configured' : '' } : undefined,
+        llm: config.llm ? { ...config.llm, api_key: config.llm.api_key ? 'configured' : '' } : undefined,
+    };
     return {
         status: 'ok',
-        config: { ...config, api_key: config.api_key ? 'configured' : '' },
+        config: safeConfig,
     };
 });
 
 ipcMain.handle('save-provider-config', async (event, config) => {
     const current = loadProviderConfig() || {};
-    const next = { ...current, ...config };
+    const next = {
+        ...current,
+        ...config,
+        transcription: { ...(current.transcription || {}), ...(config.transcription || {}) },
+        llm: { ...(current.llm || {}), ...(config.llm || {}) },
+    };
+    if (!Object.prototype.hasOwnProperty.call(config.transcription || {}, 'api_key')) {
+        next.transcription.api_key = current.transcription?.api_key || current.api_key || null;
+    }
+    if (!Object.prototype.hasOwnProperty.call(config.llm || {}, 'api_key')) {
+        next.llm.api_key = current.llm?.api_key || current.api_key || null;
+    }
     if (config.api_key === 'configured' || !Object.prototype.hasOwnProperty.call(config, 'api_key')) {
         next.api_key = current.api_key || null;
     }
     saveProviderConfig(next);
     const result = await sendEngineRequest('configure_provider', next);
-    return { ...result, config: { ...next, api_key: next.api_key ? 'configured' : '' } };
+    return { ...result, config: {
+        ...next,
+        api_key: next.api_key ? 'configured' : '',
+        transcription: { ...next.transcription, api_key: next.transcription?.api_key ? 'configured' : '' },
+        llm: { ...next.llm, api_key: next.llm?.api_key ? 'configured' : '' },
+    } };
 });
 
 ipcMain.handle('engine-command', async (event, { command, params }) => {

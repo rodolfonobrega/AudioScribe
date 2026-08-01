@@ -26,13 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusMsg = $('status-msg');
     const warningCard = $('preflight-warning-card');
     const warningText = $('preflight-warning-text');
-    const providerSelect = $('provider-select');
-    const apiKeyInput = $('api-key-input');
-    const apiKeyGroup = $('api-key-group');
-    const apiKeyLabel = $('api-key-label');
-    const apiKeyHint = $('api-key-hint');
-    const baseUrlGroup = $('base-url-group');
-    const baseUrlInput = $('base-url-input');
+    const transProviderSelect = $('transcription-provider-select');
+    const transApiKeyInput = $('transcription-api-key-input');
+    const transBaseUrlInput = $('transcription-base-url-input');
+    const llmProviderSelect = $('llm-provider-select');
+    const llmApiKeyInput = $('llm-api-key-input');
+    const llmBaseUrlInput = $('llm-base-url-input');
     const transcriptionModelSelect = $('transcription-model-select');
     const llmModelSelect = $('llm-model-select');
     const recordBtn = $('record-toggle-btn');
@@ -54,22 +53,31 @@ document.addEventListener('DOMContentLoaded', () => {
         recordActionLabel.textContent = isRecording ? 'Stop recording' : 'Start dictating';
     };
 
+    const providerDefaults = {
+        groq: { transUrl: 'https://api.groq.com/openai/v1', llmUrl: 'https://api.groq.com/openai/v1', key: 'Provider API key' },
+        openai: { transUrl: 'https://api.openai.com/v1', llmUrl: 'https://api.openai.com/v1', key: 'OpenAI API key' },
+        openrouter: { llmUrl: 'https://openrouter.ai/api/v1', key: 'OpenRouter API key' },
+        ollama: { transUrl: 'http://localhost:11434/v1', llmUrl: 'http://localhost:11434/v1', key: 'No key required' },
+        custom: { key: 'API key (optional)' },
+    };
+    const visibleProvider = (provider, model) => {
+        if (provider && provider !== 'litellm') return provider;
+        const prefix = String(model || '').split('/')[0];
+        return ['groq', 'openai', 'ollama', 'openrouter'].includes(prefix) ? prefix : 'custom';
+    };
+
     const updateProviderUI = () => {
-        const provider = providerSelect.value;
-        const local = provider === 'ollama' || provider === 'custom';
-        apiKeyGroup.classList.toggle('hidden', provider === 'ollama');
-        baseUrlGroup.classList.toggle('hidden', !local);
-        if (provider === 'ollama' && !baseUrlInput.value) baseUrlInput.value = 'http://localhost:11434/v1';
-        if (provider === 'custom') {
-            apiKeyLabel.textContent = 'API Key (optional)';
-            apiKeyHint.textContent = 'Leave empty if your endpoint does not require authentication.';
-        } else if (provider === 'openai') {
-            apiKeyLabel.textContent = 'OpenAI API Key';
-            apiKeyHint.textContent = 'The key is encrypted by the desktop process.';
-        } else {
-            apiKeyLabel.textContent = 'Groq API Key';
-            apiKeyHint.textContent = 'The key is encrypted by the desktop process.';
-        }
+        const transProvider = transProviderSelect.value;
+        const llmProvider = llmProviderSelect.value;
+        const transMeta = providerDefaults[transProvider] || providerDefaults.custom;
+        const llmMeta = providerDefaults[llmProvider] || providerDefaults.custom;
+        if (transProvider === 'ollama' && !transBaseUrlInput.value) transBaseUrlInput.value = transMeta.transUrl;
+        if (llmProvider === 'ollama' && !llmBaseUrlInput.value) llmBaseUrlInput.value = llmMeta.llmUrl;
+        if (llmProvider === 'openrouter' && !llmBaseUrlInput.value) llmBaseUrlInput.value = llmMeta.llmUrl;
+        $('transcription-api-key-hint').textContent = transMeta.key === 'No key required' ? 'This provider does not require a key.' : 'Encrypted by the desktop process.';
+        $('llm-api-key-hint').textContent = llmMeta.key === 'No key required' ? 'This provider does not require a key.' : `${llmMeta.key} is encrypted by the desktop process.`;
+        $('transcription-provider-status').textContent = transProvider === 'ollama' ? 'Chat only' : 'Not tested';
+        $('llm-provider-status').textContent = 'Not tested';
     };
 
     const addOption = (select, value, label, selected = false) => {
@@ -97,9 +105,10 @@ document.addEventListener('DOMContentLoaded', () => {
         (configured.transcription || []).forEach((model) => addOption(transcriptionModelSelect, model, `${model} (configured)`));
         if (configured.transcription?.[0]) transcriptionModelSelect.value = configured.transcription[0];
         llmModelSelect.innerHTML = '';
-        (result.llm_models || result.models || []).forEach((model) => addOption(llmModelSelect, model.id, model.name));
+        (result.llm_models || []).forEach((model) => addOption(llmModelSelect, model.id, model.name));
         (configured.llm || []).forEach((model) => addOption(llmModelSelect, model));
         if (configured.llm?.[0]) llmModelSelect.value = configured.llm[0];
+        $('provider-discovery-note').textContent = result.capability_warning || `Transcription: ${result.sources?.transcription || 'configured'} · LLM: ${result.sources?.llm || 'configured'}`;
         return result;
     };
 
@@ -133,22 +142,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = await api?.getProviderConfig?.();
         const config = result?.config;
         if (!config) return;
-        if (config.provider) providerSelect.value = config.provider;
-        if (config.base_url) baseUrlInput.value = config.base_url;
+        const trans = config.transcription || config;
+        const llm = config.llm || {};
+        if (trans.provider) transProviderSelect.value = visibleProvider(trans.provider, trans.model || config.transcription_model);
+        if (llm.provider) llmProviderSelect.value = visibleProvider(llm.provider, llm.model || config.llm_model);
+        if (trans.base_url) transBaseUrlInput.value = trans.base_url;
+        if (llm.base_url) llmBaseUrlInput.value = llm.base_url;
         if (config.api_key === 'configured') {
-            apiKeyInput.placeholder = 'Stored securely · leave blank to keep';
-            apiKeyInput.dataset.configured = 'true';
+            transApiKeyInput.placeholder = 'Stored securely · leave blank to keep';
         }
         updateProviderUI();
-        addOption(transcriptionModelSelect, config.transcription_model, config.transcription_model, true);
-        addOption(llmModelSelect, config.llm_model, config.llm_model, true);
+        addOption(transcriptionModelSelect, trans.model || config.transcription_model, trans.model || config.transcription_model, true);
+        addOption(llmModelSelect, llm.model || config.llm_model, llm.model || config.llm_model, true);
     };
 
-    providerSelect.value = localStorage.getItem('audioscribe_provider') || 'groq';
-    baseUrlInput.value = localStorage.getItem('audioscribe_base_url') || '';
     // Migrate the old plaintext renderer secret out of localStorage.
     localStorage.removeItem('audioscribe_api_key');
-    providerSelect.addEventListener('change', async () => {
+    transProviderSelect.addEventListener('change', async () => {
+        updateProviderUI();
+        await refreshModels();
+        await runPreflightCheck();
+    });
+    llmProviderSelect.addEventListener('change', async () => {
         updateProviderUI();
         await refreshModels();
         await runPreflightCheck();
@@ -172,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     $('fix-config-btn')?.addEventListener('click', () => {
         document.querySelector('[data-tab="settings"]')?.click();
-        apiKeyInput.focus();
+        transApiKeyInput.focus();
     });
     $('run-preflight-btn')?.addEventListener('click', async () => {
         const ready = await runPreflightCheck();
@@ -185,17 +200,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const button = $('save-settings-btn');
         button.disabled = true;
         const config = {
-            provider: providerSelect.value,
-            base_url: baseUrlInput.value.trim() || null,
-            transcription_model: transcriptionModelSelect.value || undefined,
-            llm_model: llmModelSelect.value || undefined,
+            transcription: { provider: transProviderSelect.value, base_url: transBaseUrlInput.value.trim() || null, model: transcriptionModelSelect.value || undefined },
+            llm: { provider: llmProviderSelect.value, base_url: llmBaseUrlInput.value.trim() || null, model: llmModelSelect.value || undefined },
         };
-        if (apiKeyInput.value.trim()) config.api_key = apiKeyInput.value.trim();
-        else if (providerSelect.value === 'ollama') config.api_key = null;
+        if (transApiKeyInput.value.trim()) config.transcription.api_key = transApiKeyInput.value.trim();
+        if (llmApiKeyInput.value.trim()) config.llm.api_key = llmApiKeyInput.value.trim();
         const result = await api?.saveProviderConfig?.(config);
         if (result?.status === 'ok') {
-            localStorage.setItem('audioscribe_provider', providerSelect.value);
-            localStorage.setItem('audioscribe_base_url', baseUrlInput.value.trim());
             await refreshModels();
             await runPreflightCheck();
             alert('Settings saved and applied to the engine.');
@@ -203,6 +214,13 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(result?.error || 'Could not apply settings to the engine.');
         }
         button.disabled = false;
+    });
+
+    $('refresh-models-btn')?.addEventListener('click', refreshModels);
+    $('test-providers-btn')?.addEventListener('click', async () => {
+        const ready = await runPreflightCheck(true);
+        $('transcription-provider-status').textContent = ready ? 'Verified' : 'Needs attention';
+        $('llm-provider-status').textContent = ready ? 'Verified' : 'Needs attention';
     });
 
     // Global hotkey recorder

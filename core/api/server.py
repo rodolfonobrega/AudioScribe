@@ -218,56 +218,66 @@ class AudioScribeServer:
         config = self.config
         if not config:
             return {"status": "error", "code": "config_unavailable", "error": "Configuração do engine indisponível."}
-        if not config.transcription.base_url:
-            configured = []
-            for model in config.transcription.model_chain:
-                configured.append({"id": model, "name": model, "provider": config.transcription.provider, "local": False, "source": "configured"})
-            return {
-                "status": "ok",
-                "models": configured,
-                "llm_models": [{"id": model, "name": model, "provider": config.llm.provider if config.llm else config.transcription.provider, "local": False, "source": "configured"} for model in (config.llm.model_chain if config.llm else [])],
-                "configured": {
-                    "transcription": config.transcription.model_chain,
-                    "llm": config.llm.model_chain if config.llm else [],
-                },
-                "discovery": "provider model list unavailable without an explicit base URL",
-            }
-        try:
-            transcription = discover_models(
-                config.transcription.base_url,
-                config.transcription.api_key,
-                config.transcription.provider,
-            )
-        except Exception as exc:
-            return {"status": "error", **discovery_error(exc), "models": []}
+        def discover_for(section):
+            configured = [{"id": model, "name": model, "provider": section.provider, "local": False, "source": "configured"} for model in section.model_chain]
+            if not section.base_url:
+                return configured, "configured"
+            try:
+                discovered = discover_models(section.base_url, section.api_key, section.provider)
+                # LiteLLM needs the routing prefix even when the provider's
+                # /models endpoint returns the vendor-native model id.
+                if section.provider in {"groq", "openrouter"}:
+                    for item in discovered:
+                        model_id = item.get("id")
+                        if model_id and not model_id.startswith(f"{section.provider}/"):
+                            item["id"] = f"{section.provider}/{model_id}"
+                            item["name"] = model_id
+                return discovered, "endpoint"
+            except Exception as exc:
+                return [{"error": discovery_error(exc), "configured": configured}], "error"
+
+        transcription, transcription_source = discover_for(config.transcription)
+        llm = []
+        llm_source = "disabled"
+        if config.llm and config.llm.enabled:
+            llm, llm_source = discover_for(config.llm)
+        if transcription_source == "error" or llm_source == "error":
+            errors = []
+            if transcription_source == "error": errors.append(transcription[0]["error"])
+            if llm_source == "error": errors.append(llm[0]["error"])
+            return {"status": "error", "code": "model_discovery_failed", "errors": errors, "models": [], "llm_models": []}
         is_ollama = config.transcription.provider.lower() == "ollama" or "11434" in (config.transcription.base_url or "")
         return {
             "status": "ok",
             "models": [] if is_ollama else transcription,
-            "llm_models": transcription,
+            "llm_models": llm,
             "configured": {
                 "transcription": [] if is_ollama else config.transcription.model_chain,
                 "llm": config.llm.model_chain if config.llm else [],
             },
+            "sources": {"transcription": transcription_source, "llm": llm_source},
             "capability_warning": "Ollama models are shown for chat only; the current engine has no Ollama speech-to-text adapter." if is_ollama else None,
         }
 
     def _configure_provider(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if not self.config or not self.orchestrator:
             return {"status": "error", "code": "config_unavailable", "error": "Configuração do engine indisponível."}
-        provider = (params.get("provider") or self.config.transcription.provider).strip().lower()
-        base_url = params.get("base_url") or None
-        api_key = params.get("api_key") or None
-        transcription_model = params.get("transcription_model") or self.config.transcription.model
-        llm_model = params.get("llm_model") or (self.config.llm.model if self.config.llm else None)
-        self.config.transcription.provider = provider
-        self.config.transcription.base_url = base_url
-        self.config.transcription.api_key = api_key
-        self.config.transcription.model = transcription_model
+        legacy_provider = (params.get("provider") or self.config.transcription.provider).strip().lower()
+        transcription = params.get("transcription") or {}
+        llm = params.get("llm") or {}
+        trans_provider = (transcription.get("provider") or legacy_provider).strip().lower()
+        trans_base_url = transcription.get("base_url") if "base_url" in transcription else params.get("base_url")
+        trans_api_key = transcription.get("api_key") if "api_key" in transcription else params.get("api_key")
+        trans_model = transcription.get("model") or params.get("transcription_model") or self.config.transcription.model
+        self.config.transcription.provider = trans_provider
+        self.config.transcription.base_url = trans_base_url or None
+        self.config.transcription.api_key = trans_api_key or None
+        self.config.transcription.model = trans_model
         if self.config.llm:
-            self.config.llm.provider = provider
-            self.config.llm.base_url = params.get("llm_base_url") or base_url
-            self.config.llm.api_key = api_key
+            self.config.llm.provider = (llm.get("provider") or params.get("llm_provider") or legacy_provider).strip().lower()
+            self.config.llm.base_url = (llm.get("base_url") if "base_url" in llm else params.get("llm_base_url")) or None
+            self.config.llm.api_key = (llm.get("api_key") if "api_key" in llm else trans_api_key) or None
+            llm_model = llm.get("model") or params.get("llm_model") or self.config.llm.model
             if llm_model:
                 self.config.llm.model = llm_model
         from core.factory import TranscriptionFactory
@@ -282,6 +292,8 @@ class AudioScribeServer:
         if not config:
             return {}
         return {
+            "transcription": {"provider": config.transcription.provider, "base_url": config.transcription.base_url, "model": config.transcription.model, "api_key_configured": bool(getattr(config.transcription, "api_key", None))},
+            "llm": {"provider": getattr(config.llm, "provider", None), "base_url": getattr(config.llm, "base_url", None), "model": config.llm.model, "api_key_configured": bool(getattr(config.llm, "api_key", None))} if config.llm else None,
             "provider": config.transcription.provider,
             "base_url": config.transcription.base_url,
             "transcription_model": config.transcription.model,
