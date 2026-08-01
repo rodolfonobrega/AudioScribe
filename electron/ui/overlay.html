@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AudioScribe Floating Overlay</title>
+    <link rel="stylesheet" href="overlay.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="overlay-container" id="overlay-container">
+        <div class="recording-pill">
+            <span class="red-dot" id="overlay-dot"></span>
+            <span class="overlay-status" id="overlay-status">Recording...</span>
+            
+            <!-- 5-bar Audio Visualizer Equalizer -->
+            <div class="wave-equalizer" id="wave-eq">
+                <span class="bar bar1"></span>
+                <span class="bar bar2"></span>
+                <span class="bar bar3"></span>
+                <span class="bar bar4"></span>
+                <span class="bar bar5"></span>
+            </div>
+
+            <span class="hotkey-hint">F9 to Stop</span>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        const statusEl = document.getElementById('overlay-status');
+        const dotEl = document.getElementById('overlay-dot');
+        const eqBars = document.querySelectorAll('.bar');
+
+        ipcRenderer.on('update-overlay-state', (event, { status, rms, text }) => {
+            if (status === 'recording') {
+                statusEl.textContent = 'Recording...';
+                dotEl.className = 'red-dot pulse';
+                
+                // Animate bars based on live RMS volume
+                const scale = Math.min(1.0, Math.max(0.15, (rms || 0.05) * 15));
+                eqBars.forEach((bar, idx) => {
+                    const heightFactor = [0.6, 1.0, 0.8, 0.9, 0.5][idx];
+                    bar.style.transform = `scaleY(${Math.max(0.2, scale * heightFactor * (0.8 + Math.random() * 0.4))})`;
+                });
+            } else if (status === 'processing') {
+                statusEl.textContent = 'Transcribing...';
+                dotEl.className = 'red-dot yellow';
+                eqBars.forEach(bar => bar.style.transform = 'scaleY(0.3)');
+            } else if (status === 'done') {
+                statusEl.textContent = text ? `Done! (${text.substring(0, 20)}...)` : 'Done!';
+                dotEl.className = 'red-dot green';
+            }
+        });
+    </script>
+</body>
+</html>

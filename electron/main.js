@@ -5,10 +5,36 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
+let overlayWindow = null;
 let tray = null;
 let pythonProcess = null;
 let socketClient = null;
 let isRecording = false;
+
+function createOverlayWindow() {
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+
+    overlayWindow = new BrowserWindow({
+        width: 380,
+        height: 80,
+        x: Math.round((width - 380) / 2),
+        y: Math.round(height - 100),
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        resizable: false,
+        show: false,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+
+    overlayWindow.loadFile(path.join(__dirname, 'ui', 'overlay.html'));
+}
 
 function setupAutoUpdater() {
     autoUpdater.autoDownload = false;
@@ -103,10 +129,28 @@ function connectToPythonServer() {
 
         for (const line of lines) {
             if (!line.trim()) continue;
-            try:
+            try {
                 const eventData = JSON.parse(line.trim());
                 if (mainWindow) {
                     mainWindow.webContents.send('engine-event', eventData);
+                }
+
+                // Update floating overlay
+                if (overlayWindow) {
+                    if (eventData.event === 'status_changed') {
+                        const status = eventData.data.status;
+                        if (status === 'recording') {
+                            overlayWindow.showInactive();
+                            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1 });
+                        } else if (status === 'processing') {
+                            overlayWindow.webContents.send('update-overlay-state', { status: 'processing' });
+                        }
+                    } else if (eventData.event === 'transcription_result') {
+                        overlayWindow.webContents.send('update-overlay-state', { status: 'done', text: eventData.data.text });
+                        setTimeout(() => {
+                            overlayWindow.hide();
+                        }, 1800);
+                    }
                 }
             } catch (err) {
                 console.error('[Electron] Error parsing JSON event:', err);
@@ -144,6 +188,16 @@ function launchPythonSidecar() {
 function toggleRecording() {
     isRecording = !isRecording;
     const command = isRecording ? 'start_recording' : 'stop_recording';
+    
+    if (overlayWindow) {
+        if (isRecording) {
+            overlayWindow.showInactive();
+            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1 });
+        } else {
+            overlayWindow.webContents.send('update-overlay-state', { status: 'processing' });
+        }
+    }
+
     if (socketClient && !socketClient.destroyed) {
         socketClient.write(JSON.stringify({ command }) + '\n');
     }
@@ -151,6 +205,7 @@ function toggleRecording() {
 
 app.whenReady().then(() => {
     createMainWindow();
+    createOverlayWindow();
     createTray();
     launchPythonSidecar();
 
