@@ -29,8 +29,9 @@ function createOverlayWindow() {
         resizable: false,
         show: false,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true
         }
     });
 

@@ -27,8 +27,6 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
-
         const statusEl = document.getElementById('overlay-status');
         const dotEl = document.getElementById('overlay-dot');
         const eqBars = document.querySelectorAll('.bar');
@@ -90,7 +88,8 @@
             }
         }
 
-        ipcRenderer.on('update-overlay-state', (event, { status, rms, text, shortcut }) => {
+        if (window.api && window.api.onOverlayState) {
+            window.api.onOverlayState(({ status, rms, text, shortcut }) => {
             if (shortcut) {
                 hotkeyHint.textContent = shortcut;
             }
