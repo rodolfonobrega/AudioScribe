@@ -17,44 +17,60 @@
 
 ## ✨ Features
 
-- 🎙️ **Real-time Audio Recording** - Cross-platform audio input support
-- 🚀 **Fast Transcription** - Powered by LiteLLM with support for 100+ AI providers (OpenAI, Groq, Google, Anthropic, etc.)
-- 🤖 **Context-Aware LLM Processing** - Smart post-processing that fixes transcription errors using context understanding
-- 🌍 **Multi-Provider Support** - Switch between OpenAI, Groq, Google Gemini, Anthropic, Azure, and more
-- 🌍 **Cross-Platform** - Works on Windows, macOS, and Linux
-- 🔧 **Modular Architecture** - Easy to extend with new implementations
-- 🎯 **Type-Safe Configuration** - YAML + Environment variables + CLI
-- ✅ **Well-Tested** - Unit tests with 47% coverage
-- 📝 **Customizable Prompts** - Use the LLM for translation, summarization, and more
+- 🎙️ **Real-Time Audio Recording** - Native support for **Push-to-Talk** (hold key to record), **Toggle Mode** (press to start/stop), and **Hands-Free VAD Mode**.
+- 🚀 **Universal Instant Transcription** - Powered by Groq (free & ultra-fast), OpenAI, Google Gemini, Deepgram, and **Localhost/Ollama** endpoints (`http://localhost:11434/v1`).
+- 🤖 **Context-Aware LLM Post-Processing** - Intelligent correction of grammar, punctuation, and phonetic errors using context.
+- ⚡ **RMS Noise Gate & Latency Tracking** - Filters out empty background noise and displays precise wall-clock latency (ms).
+- 🔍 **Pre-flight & Guided Diagnostics** - Automatic system check with step-by-step resolution guides for API keys and OS permissions.
+- 🌍 **Cross-Platform** - Windows, macOS, and Linux support (using `pynput` fallback without requiring root/sudo on Linux).
+- 📝 **Multiple Output Handlers** - Real-time auto-typing (`pyautogui`, `applescript`, `xdotool`), clipboard, and stdout console.
 
-## 🚀 Quick Start
+## 🚀 Quick Start in 3 Steps
 
-### Installation
+### 1. Get your free Groq API Key (Recommended)
+Groq provides a generous free tier with instant transcription speed (<500ms):
+1. Visit: **[console.groq.com/keys](https://console.groq.com/keys)**
+2. Create a new API key (starts with `gsk_...`).
+
+### 2. Installation and Setup
 
 ```bash
-# Clone the repository
+# Clone the repository and install dependencies
 git clone https://github.com/rodolfonobrega/audioscribe.git
 cd audioscribe
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Set your API key (Groq, OpenAI, Google, etc.)
-# For Groq (recommended for speed and free tier):
-export GROQ_API_KEY="your-api-key-here"
+# Set your API Key
+# On Linux/macOS:
+export GROQ_API_KEY="your-key-gsk_..."
 
-# For OpenAI:
-export OPENAI_API_KEY="your-api-key-here"
-
-# For Google:
-export GOOGLE_API_KEY="your-api-key-here"
+# On Windows PowerShell:
+$env:GROQ_API_KEY="your-key-gsk_..."
 ```
 
-### Usage
+### 3. Run AudioScribe
 
+#### Option A: CLI Mode (For Power Users)
 ```bash
-# Start transcribing (uses default config)
+# Pre-flight system diagnostic check (optional)
+python main.py --preflight-only
+
+# Start application in default CLI mode (Press F9 to record)
 python main.py
+
+# Start with IPC server for external integrations
+python main.py --server --port 8765
+```
+
+#### Option B: Desktop GUI (Electron App for Windows/macOS)
+```bash
+# Navigate to the electron app directory and install dependencies
+cd electron
+npm install
+
+# Start the Desktop GUI (spawns Python sidecar automatically)
+npm start
+```
 
 # Specify audio input device index (use if default fails)
 python main.py --device 1
@@ -139,11 +155,11 @@ Both transcription and LLM processing use **LiteLLM**, which provides a unified 
 
 | Provider | Model Examples |
 |----------|---------------|
-| **OpenAI** | `openai/whisper-1`, `openai/gpt-4o`, `openai/gpt-3.5-turbo` |
-| **Groq** | `groq/whisper-large-v3-turbo`, `groq/llama-3.1-8b-instant`, `groq/llama-3.3-70b-versatile` |
-| **Google** | `google/gemini-2.5-flash`, `google/gemini-3-pro` |
+| **Groq (Default, Free)** | `groq/whisper-large-v3-turbo`, `groq/llama-3.1-8b-instant` |
+| **OpenAI** | `openai/whisper-1`, `openai/gpt-4o` |
+| **Google** | `google/gemini-2.5-flash`, `google/gemini-1.5-pro` |
 | **Anthropic** | `anthropic/claude-3-5-sonnet` |
-| **Azure** | `azure/gpt-4o` |
+| **Localhost / Ollama** | Set `TRANSCRIPTION_BASE_URL="http://localhost:11434/v1"` |
 | **And 95+ more** | See [LiteLLM documentation](https://docs.litellm.ai/) |
 
 To switch providers, simply change the model prefix (e.g., `openai/`, `google/`).

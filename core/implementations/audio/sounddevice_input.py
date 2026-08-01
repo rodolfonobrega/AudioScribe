@@ -7,11 +7,44 @@ import threading
 import queue
 from typing import List, Dict, Any, Optional
 
-import sounddevice as sd
-import soundfile as sf
-import numpy as np
+try:
+    import sounddevice as sd
+except ImportError:
+    sd = None
+
+try:
+    import soundfile as sf
+except ImportError:
+    sf = None
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 from core.interfaces.audio_input import AbstractAudioInput
+
+
+def calculate_rms(audio_data) -> float:
+    """Calculate Root Mean Square (RMS) power of audio samples or WAV bytes."""
+    if audio_data is None or np is None:
+        return 0.0
+    try:
+        if isinstance(audio_data, bytes):
+            if len(audio_data) <= 44:
+                return 0.0
+            samples = np.frombuffer(audio_data[44:], dtype=np.int16)
+            if len(samples) == 0:
+                return 0.0
+            float_samples = samples.astype(np.float32) / 32768.0
+            return float(np.sqrt(np.mean(np.square(float_samples))))
+        elif hasattr(audio_data, 'dtype'):
+            if len(audio_data) == 0:
+                return 0.0
+            return float(np.sqrt(np.mean(np.square(audio_data.astype(np.float32)))))
+    except Exception:
+        return 0.0
+    return 0.0
 
 
 class SoundDeviceInput(AbstractAudioInput):
@@ -44,6 +77,9 @@ class SoundDeviceInput(AbstractAudioInput):
         Returns:
             String description of device (Name (Index N))
         """
+        if sd is None:
+            return "N/A (sounddevice ausente)"
+
         try:
             target_index = self.device_index
             
@@ -230,6 +266,12 @@ class SoundDeviceInput(AbstractAudioInput):
         """
         Validate audio input device by attempting to open a stream.
         """
+        if sd is None or sf is None or np is None:
+            raise RuntimeError(
+                "Dependências de áudio ausentes (sounddevice, soundfile ou numpy).\n"
+                "💡 Instale executando: pip install -r requirements.txt"
+            )
+
         try:
             device_index = self.device_index
             if device_index is None:
@@ -248,7 +290,13 @@ class SoundDeviceInput(AbstractAudioInput):
                     pass
             
             if device_index is None:
-                raise RuntimeError("No valid audio input device found.")
+                raise RuntimeError(
+                    "Nenhum dispositivo de entrada de áudio (microfone) foi encontrado no sistema.\n"
+                    "💡 Soluções:\n"
+                    "  • Conecte um microfone.\n"
+                    "  • No macOS: Conceda permissão em 'Ajustes do Sistema > Privacidade e Segurança > Microfone'.\n"
+                    "  • No Linux: Verifique se o ALSA/PulseAudio está ativo (`sudo apt install libportaudio2`)."
+                )
 
             # Test stream creation
             device_kwargs = {'device': device_index}
@@ -261,10 +309,13 @@ class SoundDeviceInput(AbstractAudioInput):
                 ):
                     pass
             except Exception as e:
-                raise RuntimeError(f"Failed to access audio device (Index {device_index}): {e}")
+                raise RuntimeError(
+                    f"Falha ao acessar dispositivo de áudio (Index {device_index}): {e}\n"
+                    "💡 Verifique se o microfone não está em uso exclusivo por outro aplicativo."
+                )
                 
         except Exception as e:
-            raise RuntimeError(f"Audio input validation failed: {e}")
+            raise RuntimeError(f"Validação do áudio de entrada falhou: {e}")
 
     @property
     def is_recording(self) -> bool:

@@ -19,6 +19,8 @@ class AudioConfig:
     device_index: Optional[int] = None
     dtype: str = "float32"
     min_duration: float = 0.5
+    silence_threshold_rms: float = 0.005
+    vad_silence_duration: float = 0.6
 
 
 @dataclass

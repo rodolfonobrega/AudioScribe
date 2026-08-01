@@ -106,6 +106,24 @@ class TranscriptionOrchestrator:
     def _process_audio(self, audio_data: bytes):
         """Process audio data through the pipeline."""
         try:
+            import time
+            from core.implementations.audio.sounddevice_input import calculate_rms
+
+            # Check RMS Noise Gate threshold
+            silence_threshold = 0.005
+            if hasattr(self.audio_input, 'config') and hasattr(self.audio_input.config, 'silence_threshold_rms'):
+                silence_threshold = self.audio_input.config.silence_threshold_rms
+
+            rms = calculate_rms(audio_data)
+            if rms < silence_threshold:
+                if self.ui:
+                    self.ui.show_info(f"Silent audio ignored (RMS {rms:.4f} < {silence_threshold})")
+                    hotkey_msg = f"Press {self.keyboard_listener.hotkey.upper()} to record" if (self.keyboard_listener and hasattr(self.keyboard_listener, 'hotkey')) else "Ready"
+                    self.ui.update_live_status("ready", hotkey_msg)
+                return
+
+            start_time = time.perf_counter()
+
             # Transcribe
             if self.ui:
                 self.ui.update_live_status("transcribing")
@@ -128,19 +146,23 @@ class TranscriptionOrchestrator:
                 if enhanced_text:
                     text = enhanced_text
             
-            # Output result - show both raw and processed if LLM was used
+            latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+            # Output result - show both raw and processed if LLM was used with latency
             if self.ui:
-                self.ui.show_result(text, raw_text=raw_text if self.llm_processor else None)
+                self.ui.show_result(text, raw_text=raw_text if self.llm_processor else None, latency_ms=latency_ms)
             
             self.output_handler.output(text)
             
             if self.ui:
-                self.ui.update_live_status("ready", f"Press {self.keyboard_listener.hotkey.upper()} to record")
+                hotkey_msg = f"Press {self.keyboard_listener.hotkey.upper()} to record" if (self.keyboard_listener and hasattr(self.keyboard_listener, 'hotkey')) else "Ready"
+                self.ui.update_live_status("ready", hotkey_msg)
             
         except Exception as e:
             if self.ui:
                 self.ui.show_error(f"Audio processing error: {e}")
-                self.ui.update_live_status("ready", f"Press {self.keyboard_listener.hotkey.upper()} to record")
+                hotkey_msg = f"Press {self.keyboard_listener.hotkey.upper()} to record" if (self.keyboard_listener and hasattr(self.keyboard_listener, 'hotkey')) else "Ready"
+                self.ui.update_live_status("ready", hotkey_msg)
     
     def stop(self):
         """Stop the orchestrator."""

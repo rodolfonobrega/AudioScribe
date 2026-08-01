@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AudioScribe Desktop</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="icon">🎙️</span>
+                <h2>AudioScribe</h2>
+            </div>
+            <nav class="nav-links">
+                <button class="nav-btn active" data-tab="dashboard">
+                    <span>⚡ Dashboard</span>
+                </button>
+                <button class="nav-btn" data-tab="settings">
+                    <span>⚙️ Settings</span>
+                </button>
+                <button class="nav-btn" data-tab="diagnostics">
+                    <span>🔍 Diagnostics</span>
+                </button>
+            </nav>
+            <div class="status-badge" id="global-status">
+                <span class="status-dot green"></span>
+                <span class="status-text">Engine Ready</span>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Dashboard Tab -->
+            <section id="tab-dashboard" class="tab-content active">
+                <header class="tab-header">
+                    <h1>Real-time Transcription</h1>
+                    <p class="subtitle">Press <kbd>F9</kbd> anywhere or click the button below to start dictating.</p>
+                </header>
+
+                <div class="recording-card">
+                    <button class="record-btn" id="record-toggle-btn">
+                        <span class="mic-icon">🎙️</span>
+                        <span id="record-btn-label">Start Recording (F9)</span>
+                    </button>
+                    <div class="mode-pills">
+                        <span class="pill active" id="current-mode-pill">Mode: Push-To-Talk</span>
+                        <span class="pill" id="current-provider-pill">Provider: Groq</span>
+                    </div>
+                </div>
+
+                <div class="transcription-history">
+                    <h3>Recent Transcriptions</h3>
+                    <div id="transcription-list" class="history-list">
+                        <div class="empty-state">
+                            <span>📝</span>
+                            <p>Your transcribed text will appear here in real time.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="tab-settings" class="tab-content">
+                <header class="tab-header">
+                    <h1>Application Settings</h1>
+                    <p class="subtitle">Configure AI providers, keys, and audio hardware.</p>
+                </header>
+
+                <form id="settings-form" class="settings-form">
+                    <div class="form-group">
+                        <label for="groq-api-key">Groq API Key (Free & Instant)</label>
+                        <input type="password" id="groq-api-key" placeholder="gsk_..." autocomplete="off">
+                        <small>Get a free API key at <a href="#" id="link-groq-keys">console.groq.com/keys</a></small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="audio-device-select">Microphone Device</label>
+                        <select id="audio-device-select">
+                            <option value="">Auto / Default Microphone</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="interaction-mode-select">Interaction Mode</label>
+                        <select id="interaction-mode-select">
+                            <option value="push_to_talk">Push-To-Talk (Hold F9)</option>
+                            <option value="toggle">Toggle Mode (Press F9 to start/stop)</option>
+                            <option value="vad">Hands-Free VAD Mode (Auto-Detect Voice)</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="save-btn">Save Settings</button>
+                </form>
+            </section>
+
+            <!-- Diagnostics Tab -->
+            <section id="tab-diagnostics" class="tab-content">
+                <header class="tab-header">
+                    <h1>System Pre-flight Diagnostics</h1>
+                    <p class="subtitle">Automatic health check for permissions, audio hardware, and keys.</p>
+                </header>
+
+                <div class="diag-actions">
+                    <button class="run-diag-btn" id="run-preflight-btn">Run Diagnostics Now</button>
+                </div>
+
+                <div id="diag-results" class="diag-results-box">
+                    <p>Click the button above to test your system environment.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

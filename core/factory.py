@@ -7,7 +7,7 @@ import platform
 from typing import Optional
 
 from config.settings import Config
-from core.implementations.audio.sounddevice_input import SoundDeviceInput
+from core.implementations.transcription.litellm_transcriber import LiteLLMTranscriber
 from core.implementations.transcription.groq_transcriber import GroqTranscriber
 from core.implementations.llm.litellm_processor import LiteLLMProcessor
 from core.implementations.transcription.fallback_transcriber import FallbackTranscriber
@@ -42,12 +42,11 @@ class TranscriptionFactory:
     @staticmethod
     def create_transcriber(config: Config):
         """
-        Create transcriber component.
+        Create universal transcriber component (LiteLLMTranscriber).
 
-        Uses GroqTranscriber with internal fallback model chain if configured.
-        For mixing different provider implementations, use create_transcriber_chain().
+        Supports Groq, OpenAI, Google, Deepgram, and local servers (Ollama/localhost via base_url).
         """
-        return GroqTranscriber(config.transcription)
+        return LiteLLMTranscriber(config.transcription)
 
     @staticmethod
     def create_transcriber_chain(transcribers: list, max_retries: int = 2, retry_delay: float = 1.0):

@@ -180,25 +180,28 @@ class TerminalUI:
         if self.verbose:
             print(f"\r{' ' * 100}\r", end="", flush=True)
     
-    def show_result(self, text: str, raw_text: str = None):
+    def show_result(self, text: str, raw_text: str = None, latency_ms: Optional[float] = None):
         """
         Display transcription result.
         
         Args:
             text: Final processed text
             raw_text: Optional raw transcription (before LLM processing)
+            latency_ms: Optional latency measurement in milliseconds
         """
         if not self.verbose:
             return
         
         self.clear_status_line()
         
+        latency_suffix = f" (⚡ {latency_ms:.0f}ms)" if latency_ms is not None else ""
+        
         # Show raw transcription if provided
         if raw_text and raw_text != text:
             print(f"\n📝 Transcription: {raw_text}")
-            print(f"🤖 LLM Output:    {text}\n")
+            print(f"🤖 LLM Output:    {text}{latency_suffix}\n")
         else:
-            print(f"\n✅ Result: {text}\n")
+            print(f"\n✅ Result: {text}{latency_suffix}\n")
     
     def show_error(self, error: str):
         """

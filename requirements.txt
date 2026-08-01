@@ -16,6 +16,7 @@ pyaudio>=0.2.13
 
 # Cross-platform keyboard
 keyboard>=0.13.5
+pynput>=1.7.6
 
 # Cross-platform clipboard and automation
 pyperclip>=1.8.2

@@ -8,6 +8,8 @@ audio:
   device_index: null       # Audio device index (null=default device)
   dtype: "float32"         # Audio data type
   min_duration: 0.75       # Minimum audio duration in seconds
+  silence_threshold_rms: 0.005 # Minimum RMS power threshold to reject background silence
+  vad_silence_duration: 0.6    # Continuous silence duration (s) to end VAD recording
 
 # Transcription Service Configuration
 transcription:

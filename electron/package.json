@@ -1,0 +1,47 @@
+{
+  "name": "audioscribe-desktop",
+  "version": "1.0.0",
+  "description": "AudioScribe Desktop - Cross-platform Speech-to-Text with AI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "audio",
+    "transcription",
+    "speech-to-text",
+    "ai",
+    "groq",
+    "whisper"
+  ],
+  "author": "AudioScribe Team",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.audioscribe.desktop",
+    "productName": "AudioScribe",
+    "directories": {
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": "bin/",
+        "to": "bin/",
+        "filter": ["*"]
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

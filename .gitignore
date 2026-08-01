@@ -156,3 +156,7 @@ transcripts.txt
 test_*.py
 debug_*.py
 debug_*.txt
+scratch/
+electron/node_modules/
+electron/dist/
+electron/bin/
