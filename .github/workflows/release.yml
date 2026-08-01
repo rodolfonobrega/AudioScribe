@@ -43,6 +43,9 @@ jobs:
         run: |
           cd electron
           ${{ matrix.build_cmd }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Binaries to GitHub Release
         uses: softprops/action-gh-release@v2
