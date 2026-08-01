@@ -59,7 +59,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .app-header { height: 68px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .brand, .header-actions, .brand-copy, .theme-toggle-btn, .status-bar, .sidebar-footer, .nav-btn, .page-heading, .heading-status, .card-header, .record-card-topline, .hotkey-display, .warning-header, .section-intro, .form-actions, .profile-header-row, .profile-title-group, .profile-actions-row, .profile-hotkey-group { display: flex; align-items: center; }
 .brand { gap: 11px; }
-.brand-mark { width: 31px; height: 31px; display: grid; place-items: center; background: var(--text); color: var(--bg); font-size: 11px; font-weight: 800; letter-spacing: -.06em; }
+.brand-mark { overflow: hidden; width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-soft); }
+.brand-mark img { width: 100%; height: 100%; object-fit: cover; }
 .brand-copy { align-items: flex-start; flex-direction: column; gap: 2px; }
 .brand-name { font-weight: 700; letter-spacing: -.02em; }
 .brand-context { color: var(--text-dim); font-size: 11px; }
@@ -136,6 +137,7 @@ h2 { margin-bottom: 6px; font-size: 17px; font-weight: 650; letter-spacing: -.02
 .transcription-item .meta { margin-bottom: 7px; color: var(--text-dim); font-family: ui-monospace, monospace; font-size: 10px; }
 .transcription-item .body { color: var(--text); font-size: 13px; line-height: 1.55; }
 .empty-state { display: flex; align-items: flex-start; flex-direction: column; gap: 7px; padding: 30px 13px 26px; background: var(--surface-soft); color: var(--text-soft); }
+.empty-state-art { width: 110px; height: 58px; margin: -10px 0 4px; border-radius: 5px; object-fit: cover; opacity: .58; filter: saturate(.72) contrast(1.05); }
 .empty-state p { margin: 0; font-size: 13px; }
 .empty-state small { color: var(--text-dim); font-size: 11px; }
 .empty-line { width: 34px; height: 1px; margin-bottom: 4px; background: var(--accent); }

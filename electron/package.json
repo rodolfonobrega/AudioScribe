@@ -28,6 +28,7 @@
   "build": {
     "appId": "com.audioscribe.desktop",
     "productName": "AudioScribe",
+    "icon": "../assets/audioscribe-icon.png",
     "publish": {
       "provider": "github",
       "owner": "rodolfonobrega",
@@ -37,6 +38,11 @@
       "output": "dist"
     },
     "extraResources": [
+      {
+        "from": "../assets",
+        "to": "assets",
+        "filter": ["**/*"]
+      },
       {
         "from": "bin",
         "to": "bin",

@@ -381,7 +381,11 @@ document.addEventListener('DOMContentLoaded', () => {
     $('clear-history-btn')?.addEventListener('click', () => {
         historyList.textContent = '';
         const empty = document.createElement('div'); empty.className = 'empty-state'; empty.id = 'empty-history-state';
-        empty.textContent = 'Your recent dictations will appear here.'; historyList.appendChild(empty);
+        const art = document.createElement('img'); art.className = 'empty-state-art'; art.src = 'assets/history-empty.png'; art.alt = '';
+        const line = document.createElement('span'); line.className = 'empty-line';
+        const text = document.createElement('p'); text.textContent = 'Your recent dictations will appear here.';
+        const hint = document.createElement('small'); hint.textContent = 'Press F9 anywhere on your computer to start dictating.';
+        empty.append(art, line, text, hint); historyList.appendChild(empty);
     });
 
     loadProviderConfig().then(async () => { await refreshDevices(); await refreshModels(); await runPreflightCheck(); await refreshUsage(); });

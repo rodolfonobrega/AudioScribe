@@ -1,6 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; user-select: none; }
 body { height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent !important; }
-.overlay-container { display: flex; align-items: center; justify-content: center; }
+.overlay-container { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.overlay-wave-art { position: absolute; width: 370px; height: 92px; object-fit: cover; opacity: .18; mix-blend-mode: screen; filter: contrast(1.3) brightness(.75); pointer-events: none; }
 .recording-pill { display: flex; align-items: center; gap: 11px; min-height: 42px; padding: 0 13px; border: 1px solid rgba(240, 241, 237, .2); border-radius: 4px; background: rgba(21, 23, 25, .94); box-shadow: 0 11px 28px rgba(0, 0, 0, .32); color: #f0f1ed; font-size: 12px; font-weight: 650; }
 .state-dot { width: 7px; height: 7px; border-radius: 50%; background: #d5a45b; }
 .state-dot.pulse { animation: state-pulse 1.45s ease-out infinite; }

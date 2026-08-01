@@ -14,6 +14,12 @@ const pendingRequests = new Map();
 let reconnectTimer = null;
 let isRecording = false;
 
+function assetPath(name) {
+    return app.isPackaged
+        ? path.join(process.resourcesPath, 'assets', name)
+        : path.join(__dirname, '..', 'assets', name);
+}
+
 function providerConfigPath() {
     return path.join(app.getPath('userData'), 'provider-config.json.enc');
 }
@@ -143,7 +149,7 @@ function createMainWindow() {
 
 function createTray() {
     // Basic tray setup
-    tray = new Tray(path.join(__dirname, '..', 'assets', 'llm_transcriber.png'));
+    tray = new Tray(assetPath('audioscribe-icon.png'));
     
     const contextMenu = Menu.buildFromTemplate([
         { label: 'AudioScribe Active', enabled: false },
