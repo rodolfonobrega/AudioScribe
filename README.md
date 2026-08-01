@@ -1,214 +1,123 @@
-# AudioScribe
+# AudioScribe 🎙️
 
 <div align="center">
-  <img src="assets/llm_transcriber.png" alt="AudioScribe Logo" width="500">
+  <img src="assets/llm_transcriber.png" alt="AudioScribe Logo" width="550">
 
-  **A cross-platform, modular audio transcription system with LLM processing**
+  <h3>The Open-Source, Model-Agnostic AI Voice Dictation System</h3>
+  <p><b>Stop paying monthly subscriptions for locked-in voice tools. Get 100% freedom, lightning speed, and total control over your AI models.</b></p>
 
   [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+  [![Electron](https://img.shields.io/badge/Desktop-Electron-47858E.svg)](https://www.electronjs.org/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+  [![GitHub Release](https://img.shields.io/github/v/release/rodolfonobrega/AudioScribe)](https://github.com/rodolfonobrega/AudioScribe/releases)
 
-  [Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Documentation](#-documentation)
+  [Download Desktop App](#-get-started-in-60-seconds) • [Why AudioScribe?](#-why-audioscribe-vs-whisperflow--superwhisper) • [Features](#-key-features) • [Documentation](#-documentation)
 
 </div>
 
 ---
 
-## ✨ Features
+## ⚡ Why AudioScribe? (vs. Whisper Flow & Superwhisper)
 
-- 🎙️ **Real-Time Audio Recording** - Native support for **Push-to-Talk** (hold key to record), **Toggle Mode** (press to start/stop), and **Hands-Free VAD Mode**.
-- 🚀 **Universal Instant Transcription** - Powered by Groq (free & ultra-fast), OpenAI, Google Gemini, Deepgram, and **Localhost/Ollama** endpoints (`http://localhost:11434/v1`).
-- 🤖 **Context-Aware LLM Post-Processing** - Intelligent correction of grammar, punctuation, and phonetic errors using context.
-- ⚡ **RMS Noise Gate & Latency Tracking** - Filters out empty background noise and displays precise wall-clock latency (ms).
-- 🔍 **Pre-flight & Guided Diagnostics** - Automatic system check with step-by-step resolution guides for API keys and OS permissions.
-- 🌍 **Cross-Platform** - Windows, macOS, and Linux support (using `pynput` fallback without requiring root/sudo on Linux).
-- 📝 **Multiple Output Handlers** - Real-time auto-typing (`pyautogui`, `applescript`, `xdotool`), clipboard, and stdout console.
+Proprietary apps like **Whisper Flow** or **Superwhisper** are great—until you get hit with **$10–$20/month subscription fees**, restrictive monthly minute caps, vendor lock-in, and zero control over your privacy or AI model choice.
 
-## 🚀 Quick Start in 3 Steps
+**AudioScribe was built to set your dictation free:**
 
-### 1. Get your free Groq API Key (Recommended)
-Groq provides a generous free tier with instant transcription speed (<500ms):
-1. Visit: **[console.groq.com/keys](https://console.groq.com/keys)**
-2. Create a new API key (starts with `gsk_...`).
+| Feature | **AudioScribe 🚀** | **Whisper Flow / Superwhisper 🔒** |
+| :--- | :--- | :--- |
+| **Price** | **100% Free & Open Source** | $10–$20/month subscription |
+| **Model Choice** | **100+ AI Models** (Groq, OpenAI, Gemini, Local Ollama) | Locked to vendor's single default model |
+| **Speed** | **Sub-500ms** Instant Response (via Groq) | Varies / Latency delays |
+| **Privacy & Offline** | **100% Offline Capable** (Ollama / Localhost) | Cloud-locked |
+| **Cross-Platform** | **Windows, macOS & Linux** | macOS-only or Windows-only |
+| **Interface** | **Desktop GUI App & CLI Mode** | Closed GUI only |
+| **Custom LLM Prompts** | **Fully Customizable** System Prompts | Fixed or non-existent |
 
-### 2. Installation and Setup
+---
+
+## ✨ Key Features
+
+- 🚀 **Sub-500ms Instant Transcription** - Powered by **Groq** (`whisper-large-v3-turbo`) for instant voice-to-text without paying a dime.
+- 🔓 **Universal Provider Support** - Switch seamlessly between **Groq, OpenAI, Google Gemini, Deepgram, Anthropic**, or run **100% offline with Ollama** (`http://localhost:11434/v1`).
+- 🤖 **Context-Aware LLM Refactoring** - Automatically cleans up filler words ("um", "ah"), fixes punctuation, and corrects grammar before auto-typing into your active window.
+- 🎙️ **Flexible Dictation Modes**:
+  - **Push-to-Talk**: Hold `F9` while speaking, release to type.
+  - **Toggle Mode**: Press `F9` to start, press again to stop.
+  - **Hands-Free VAD Mode**: Automatically detects your voice and pauses.
+- ⚡ **RMS Noise Gate & Latency Monitor** - Filters out background silence automatically and displays real-time execution metrics (`⚡ 320ms`).
+- 💻 **Desktop App (Electron) & CLI**:
+  - **Non-Technical Users**: Beautiful System Tray Desktop GUI with one-click setup.
+  - **Power Users**: Lightweight headless CLI (`python main.py`).
+
+---
+
+## 🚀 Get Started in 60 Seconds
+
+### Option 1: Download the Pre-Compiled Desktop App (Easiest)
+
+1. Go to **[GitHub Releases](https://github.com/rodolfonobrega/AudioScribe/releases)**.
+2. Download the installer for your OS:
+   - 🪟 **Windows**: `AudioScribe-Setup-1.0.0.exe`
+   - 🍏 **macOS**: `AudioScribe-1.0.0.dmg`
+   - 🐧 **Linux**: `AudioScribe-1.0.0.AppImage`
+3. Get your **free API key** at **[console.groq.com/keys](https://console.groq.com/keys)**, paste it into the app, and press **F9** to dictate!
+
+---
+
+### Option 2: Run via CLI (For Developers & Power Users)
 
 ```bash
-# Clone the repository and install dependencies
-git clone https://github.com/rodolfonobrega/audioscribe.git
-cd audioscribe
+# 1. Clone repository & install dependencies
+git clone https://github.com/rodolfonobrega/AudioScribe.git
+cd AudioScribe
 pip install -r requirements.txt
 
-# Set your API Key
-# On Linux/macOS:
-export GROQ_API_KEY="your-key-gsk_..."
+# 2. Set your free Groq API key
+# Linux / macOS:
+export GROQ_API_KEY="gsk_your_key_here"
 
-# On Windows PowerShell:
-$env:GROQ_API_KEY="your-key-gsk_..."
-```
+# Windows PowerShell:
+$env:GROQ_API_KEY="gsk_your_key_here"
 
-### 3. Run AudioScribe
-
-#### Option A: CLI Mode (For Power Users)
-```bash
-# Pre-flight system diagnostic check (optional)
+# 3. Run Pre-flight Diagnostic Check (Optional)
 python main.py --preflight-only
 
-# Start application in default CLI mode (Press F9 to record)
+# 4. Start Dictating! (Press F9 to record)
 python main.py
-
-# Start with IPC server for external integrations
-python main.py --server --port 8765
 ```
 
-#### Option B: Desktop GUI (Electron App for Windows/macOS)
-```bash
-# Navigate to the electron app directory and install dependencies
-cd electron
-npm install
+---
 
-# Start the Desktop GUI (spawns Python sidecar automatically)
-npm start
-```
+## 🛠️ Customizing AI Models & Providers
 
-# Specify audio input device index (use if default fails)
-python main.py --device 1
-
-# Process an audio file instead of recording
-python main.py --file path/to/audio.wav
-
-# Process text directly (useful for testing LLM correction)
-python main.py --text "Text to correct"
-
-# Disable LLM post-processing (raw transcription only)
-python main.py --no-llm
-
-# Output to clipboard or other handlers
-python main.py --output clipboard
-
-# Disable keyboard listener (useful for automation/headless)
-python main.py --no-keyboard
-
-# Enable verbose logs
-python main.py --verbose
-
-# Use a specific configuration file
-python main.py --config config/my_custom_config.yaml
-```
-
-### Output Handlers
-
-AudioScribe supports multiple output methods:
-
-| Handler | Platforms | Description |
-|---------|-----------|-------------|
-| **pyautogui** | Windows, macOS, Linux | Cross-platform keyboard typing (recommended, fast) |
-| **autoit** | Windows only | Windows-specific automation (very fast) |
-| **clipboard** | Windows, macOS, Linux | Copy to clipboard |
-| **stdout** | All | Print to console only |
-| **applescript** | macOS only | macOS-specific automation |
-| **xdotool** | Linux only | Linux-specific automation |
-
-Configure in `config/defaults.yaml`:
-```yaml
-output:
-  handlers:
-    - pyautogui  # or autoit, clipboard, etc.
-```
-```
-
-### Configuration Hierarchy
-
-AudioScribe loads configuration in the following order (last one wins):
-
-1.  **`config/defaults.yaml`**: Base settings.
-2.  **Environment Variables**: Overrides from `.env` or system.
-    *   `GROQ_API_KEY`, `OPENAI_API_KEY`, etc.
-    *   `TRANSCRIPTION_MODEL`, `LLM_MODEL`
-3.  **CLI Arguments**: Command-line flags override everything.
-
-### Customizing Models
-
-To change the model, edit `config/defaults.yaml` or use environment variables:
-
-```yaml
-# config/defaults.yaml
-transcription:
-  model: groq/whisper-large-v3-turbo
-
-llm:
-  model: groq/meta-llama/llama-guard-4-12b
-```
-
-Or via environment variables:
+To change providers, simply edit `config/defaults.yaml` or set environment variables:
 
 ```bash
+# Use OpenAI Whisper
 export TRANSCRIPTION_MODEL="openai/whisper-1"
-export LLM_MODEL="gpt-4"
+export OPENAI_API_KEY="sk-..."
+
+# Use Local Ollama (100% Offline & Private)
+export TRANSCRIPTION_BASE_URL="http://localhost:11434/v1"
+export TRANSCRIPTION_MODEL="ollama/whisper"
+
 python main.py
 ```
 
-### Supported Providers via LiteLLM
+---
 
-Both transcription and LLM processing use **LiteLLM**, which provides a unified API for 100+ AI providers:
+## 🖥️ Desktop App Screenshots
 
-| Provider | Model Examples |
-|----------|---------------|
-| **Groq (Default, Free)** | `groq/whisper-large-v3-turbo`, `groq/llama-3.1-8b-instant` |
-| **OpenAI** | `openai/whisper-1`, `openai/gpt-4o` |
-| **Google** | `google/gemini-2.5-flash`, `google/gemini-1.5-pro` |
-| **Anthropic** | `anthropic/claude-3-5-sonnet` |
-| **Localhost / Ollama** | Set `TRANSCRIPTION_BASE_URL="http://localhost:11434/v1"` |
-| **And 95+ more** | See [LiteLLM documentation](https://docs.litellm.ai/) |
+<div align="center">
+  <p><i>Sleek Dark-Mode Dashboard with System Tray Integration, Device Selector & Live Latency Metrics</i></p>
+</div>
 
-To switch providers, simply change the model prefix (e.g., `openai/`, `google/`).
-
-## 🧪 Testing
-
-```bash
-# Run tests
-pytest tests/
-
-# Run with coverage
-pytest --cov=core --cov=config --cov-report=html
-
-# View coverage report
-open htmlcov/index.html  # macOS
-start htmlcov/index.html  # Windows
-xdg-open htmlcov/index.html  # Linux
-```
-
-## 🐳 Docker
-
-```bash
-# Build and run with Docker
-docker-compose up --build
-
-# Run with audio device support
-docker run --device /dev/snd audioscribe
-```
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! Check out [CONTRIBUTING.md](CONTRIBUTING.md) for details on setting up your environment and submitting pull requests.
 
-## 📝 License
+## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [Groq](https://groq.com/) - Fast inference platform
-- [LiteLLM](https://github.com/BerriAI/litellm) - Unified LLM API
-- [sounddevice](https://python-sounddevice.readthedocs.io/) - Audio I/O
-
----
-
-<div align="center">
-
-**Made with ❤️ by [Rodolfo](https://github.com/rodolfonobrega)**
-
-[⬆ Back to Top](#audioscribe)
-
-</div>
+AudioScribe is licensed under the [MIT License](LICENSE).
