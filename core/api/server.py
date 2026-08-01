@@ -169,6 +169,19 @@ class AudioScribeServer:
         checker = PreflightChecker(config=self.config)
         ready = checker.check_all()
         checks = []
+        transcription_config = getattr(self.config, "transcription", None)
+        if transcription_config and (
+            getattr(transcription_config, "provider", "").lower() == "ollama"
+            or "11434" in (getattr(transcription_config, "base_url", None) or "")
+        ):
+            ready = False
+            checks.append({
+                "component": "transcription",
+                "status": "error",
+                "code": "ollama_speech_unsupported",
+                "error": "Ollama foi detectado, mas este engine não possui adaptador de speech-to-text para o endpoint de chat.",
+                "remediation": "Use Ollama apenas no pós-processamento ou configure um servidor local de Whisper como endpoint de transcrição.",
+            })
         if self.orchestrator:
             components = [
                 ("transcription", self.orchestrator.transcriber),
@@ -227,14 +240,16 @@ class AudioScribeServer:
             )
         except Exception as exc:
             return {"status": "error", **discovery_error(exc), "models": []}
+        is_ollama = config.transcription.provider.lower() == "ollama" or "11434" in (config.transcription.base_url or "")
         return {
             "status": "ok",
-            "models": transcription,
+            "models": [] if is_ollama else transcription,
             "llm_models": transcription,
             "configured": {
-                "transcription": config.transcription.model_chain,
+                "transcription": [] if is_ollama else config.transcription.model_chain,
                 "llm": config.llm.model_chain if config.llm else [],
             },
+            "capability_warning": "Ollama models are shown for chat only; the current engine has no Ollama speech-to-text adapter." if is_ollama else None,
         }
 
     def _configure_provider(self, params: Dict[str, Any]) -> Dict[str, Any]:

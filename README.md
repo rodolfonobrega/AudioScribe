@@ -1,5 +1,18 @@
 # AudioScribe 🎙️
 
+## Runtime truth and local validation
+
+The Electron app uses the Python engine as the single source of truth. It does not mark a provider or model as ready from a URL alone: model discovery and engine checks are performed through the IPC server, and the recording action can run an explicit live provider test. Ollama models are currently supported for chat/post-processing discovery only; Ollama is not treated as a speech-to-text provider unless a dedicated local speech adapter is added.
+
+API usage is persisted locally in SQLite under `~/.audioscribe/usage.sqlite3` (or `AUDIOSCRIBE_DATA_DIR`). The UI reports estimated total, daily and monthly cost. If a provider does not return usage metadata and no catalogued price exists, the value is shown as `Unknown`, never silently as zero.
+
+Validation commands:
+
+```bash
+python -m pytest tests -q
+python -m compileall -q core config main.py
+```
+
 <div align="center">
   <img src="assets/llm_transcriber.png" alt="AudioScribe Logo" width="550">
 
