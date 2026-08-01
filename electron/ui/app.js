@@ -136,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Settings saved successfully!');
     });
 
-    // --- 4. INTERACTIVE HOTKEY RECORDER ---
+    // --- 4. INTERACTIVE MULTI-KEY HOTKEY RECORDER ---
     const hotkeyInput = document.getElementById('hotkey-recorder-input');
     const recordHotkeyBtn = document.getElementById('record-hotkey-btn');
     const activeHotkeyBadge = document.getElementById('active-hotkey-badge');
@@ -148,39 +148,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
     recordHotkeyBtn.addEventListener('click', () => {
         isRecordingHotkey = true;
-        hotkeyInput.value = 'Press key combination...';
+        hotkeyInput.value = 'Press key combination (e.g. Ctrl+Shift+R)...';
         recordHotkeyBtn.textContent = 'Listening...';
         recordHotkeyBtn.style.backgroundColor = '#ef4444';
     });
 
+    function formatElectronKey(e) {
+        const isModifierKey = ['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(e.key);
+
+        const modifiers = [];
+        if (e.ctrlKey) modifiers.push('CommandOrControl');
+        if (e.altKey) modifiers.push('Alt');
+        if (e.shiftKey) modifiers.push('Shift');
+        if (e.metaKey) modifiers.push('Super');
+
+        const uniqueModifiers = [...new Set(modifiers)];
+
+        if (isModifierKey) {
+            const prettyMods = uniqueModifiers.map(m => m === 'CommandOrControl' ? 'Ctrl' : m);
+            return {
+                isComplete: false,
+                preview: prettyMods.length > 0 ? prettyMods.join(' + ') + ' + ...' : 'Listening...'
+            };
+        }
+
+        let keyName = '';
+        if (e.code.startsWith('Key')) {
+            keyName = e.code.replace('Key', '').toUpperCase();
+        } else if (e.code.startsWith('Digit')) {
+            keyName = e.code.replace('Digit', '');
+        } else if (e.code.startsWith('F') && e.code.length <= 3) {
+            keyName = e.code;
+        } else if (e.code === 'Space' || e.key === ' ') {
+            keyName = 'Space';
+        } else if (e.code === 'Tab') {
+            keyName = 'Tab';
+        } else if (e.code === 'Escape') {
+            keyName = 'Escape';
+        } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+            keyName = 'Return';
+        } else if (e.code === 'Backspace') {
+            keyName = 'Backspace';
+        } else if (e.code === 'Delete') {
+            keyName = 'Delete';
+        } else {
+            keyName = e.key.toUpperCase();
+        }
+
+        const acceleratorParts = [...uniqueModifiers, keyName];
+        const prettyParts = uniqueModifiers.map(m => m === 'CommandOrControl' ? 'Ctrl' : m).concat(keyName);
+
+        return {
+            isComplete: true,
+            accelerator: acceleratorParts.join('+'),
+            pretty: prettyParts.join('+')
+        };
+    }
+
     document.addEventListener('keydown', async (e) => {
         if (!isRecordingHotkey) return;
         e.preventDefault();
+        e.stopPropagation();
 
-        const keys = [];
-        if (e.ctrlKey) keys.push('Control');
-        if (e.shiftKey) keys.push('Shift');
-        if (e.altKey) keys.push('Alt');
-        if (e.metaKey) keys.push('Command');
-
-        const key = e.key.toUpperCase();
-        if (!['CONTROL', 'SHIFT', 'ALT', 'META'].includes(key)) {
-            keys.push(key);
-        }
-
-        if (keys.length > 0) {
-            const shortcutString = keys.join('+');
+        const result = formatElectronKey(e);
+        if (!result.isComplete) {
+            hotkeyInput.value = result.preview;
+        } else {
             isRecordingHotkey = false;
-            hotkeyInput.value = shortcutString;
-            activeHotkeyBadge.textContent = shortcutString;
+            hotkeyInput.value = result.pretty;
             recordHotkeyBtn.textContent = 'Record Hotkey';
             recordHotkeyBtn.style.backgroundColor = '';
 
-            localStorage.setItem('audioscribe_shortcut', shortcutString);
             if (window.api && window.api.registerShortcut) {
-                const res = await window.api.registerShortcut(shortcutString);
+                const res = await window.api.registerShortcut(result.accelerator);
                 if (res && res.status === 'ok') {
-                    console.log(`[Hotkey] Registered ${shortcutString}`);
+                    activeHotkeyBadge.textContent = result.pretty;
+                    localStorage.setItem('audioscribe_shortcut', result.pretty);
+                    console.log(`[Hotkey] Successfully registered ${result.accelerator}`);
+                } else {
+                    const err = (res && res.error) || 'Invalid key combination';
+                    alert(`Failed to register shortcut '${result.pretty}': ${err}`);
+                    hotkeyInput.value = savedShortcut;
+                    activeHotkeyBadge.textContent = savedShortcut;
                 }
             }
         }
