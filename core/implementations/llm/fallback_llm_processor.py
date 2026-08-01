@@ -51,6 +51,8 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
             for processor in processors
         }
         self._fallback_count = 0
+        self.last_usage = {"input_tokens": None, "output_tokens": None, "cost": None}
+        self.last_fallback_used = False
 
     @property
     def active_processor(self) -> str:
@@ -100,6 +102,8 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
                         result = processor.process(text)
 
                     if result is not None:
+                        self.last_usage = getattr(processor, "last_usage", self.last_usage)
+                        self.last_fallback_used = idx > 0
                         # Success - update stats and return
                         self._processor_usage[processor_name] += 1
                         if idx > 0:

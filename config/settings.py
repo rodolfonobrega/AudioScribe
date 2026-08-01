@@ -47,7 +47,7 @@ class TranscriptionConfig:
 class LLMConfig:
     """LLM processor configuration."""
     provider: str = "litellm"
-    model: str = "groq/meta-llama/llama-4-maverick-17b-128e-instruct"
+    model: str = "groq/openai/gpt-oss-120b"
     fallback_models: List[str] = field(default_factory=list)
     max_retries: int = 2
     retry_delay: float = 1.0

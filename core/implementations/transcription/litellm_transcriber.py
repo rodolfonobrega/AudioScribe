@@ -53,6 +53,7 @@ class LiteLLMTranscriber(AbstractTranscriber):
         self._model_usage = {model: 0 for model in self.model_chain}
         self._fallback_count = 0
         self.last_usage = {"input_tokens": None, "output_tokens": None, "cost": None}
+        self.last_fallback_used = False
 
         if not self.model_chain:
             raise ValueError("At least one model must be configured for transcription.")
@@ -102,6 +103,7 @@ class LiteLLMTranscriber(AbstractTranscriber):
 
     def transcribe_file(self, file_path: str) -> Optional[str]:
         """Transcribe audio file with fallback chain support."""
+        self.last_fallback_used = False
         for model_idx, model in enumerate(self.model_chain):
             self._current_model_index = model_idx
 
@@ -111,6 +113,7 @@ class LiteLLMTranscriber(AbstractTranscriber):
 
                     self._model_usage[model] += 1
                     if model_idx > 0:
+                        self.last_fallback_used = True
                         print(f"✓ Fallback transcription successful: {model}")
                     return result
 

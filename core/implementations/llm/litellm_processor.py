@@ -38,6 +38,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
         self._model_usage = {model: 0 for model in self.model_chain}
         self._fallback_count = 0
         self.last_usage = {"input_tokens": None, "output_tokens": None, "cost": None}
+        self.last_fallback_used = False
 
         if not self.model_chain:
             raise ValueError("At least one model must be configured.")
@@ -152,6 +153,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
             Processed text, or None if all models failed
         """
         messages = self._prepare_messages(text, history)
+        self.last_fallback_used = False
 
         # Try each model in the chain
         for model_idx, model in enumerate(self.model_chain):
@@ -166,6 +168,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
                     # Success - update stats and return
                     self._model_usage[model] += 1
                     if model_idx > 0:
+                        self.last_fallback_used = True
                         print(f"✓ Fallback successful: {model}")
                     return result
 

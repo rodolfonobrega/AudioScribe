@@ -1,77 +1,39 @@
-# Multi-stage build for AudioScribe
-FROM python:3.11-slim as builder
+# AudioScribe Python engine image.
+# The Electron desktop app is packaged separately; this image is for the
+# headless/IPC engine and requires host audio passthrough on Linux.
+FROM python:3.12-slim
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    g++ \
-    libasound2-dev \
-    libportaudio2-dev \
-    libportaudiocpp0 \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# Copy requirements and install Python dependencies
-COPY pyproject.toml ./
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -e .[typing]
-
-# Runtime stage
-FROM python:3.11-slim
-
-# Install runtime dependencies for audio
-RUN apt-get update && apt-get install -y \
     libasound2 \
+    libasound2-dev \
     libportaudio2 \
-    libportaudiocpp0 \
-    curl \
+    portaudio19-dev \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY requirements-docker.txt ./
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements-docker.txt
 
-# Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+COPY main.py __init__.py ./
+COPY config ./config
+COPY core ./core
 
-# Copy application code
-COPY src/ ./src/
-COPY config.yaml ./
-COPY .env.example ./
-COPY README.md ./
-COPY AGENTS.md ./
+RUN useradd --create-home --uid 10001 audioscribe \
+    && mkdir -p /home/audioscribe/.audioscribe \
+    && chown -R audioscribe:audioscribe /app /home/audioscribe
+USER audioscribe
+ENV HOME=/home/audioscribe \
+    AUDIOSCRIBE_DATA_DIR=/home/audioscribe/.audioscribe
 
-# Create non-root user for security
-ARG USERNAME=transcriber
-ARG USER_UID=1000
-ARG GID=1000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import socket,json; s=socket.create_connection(('127.0.0.1',8765),2); s.sendall(b'{\\\"id\\\":\\\"health\\\",\\\"command\\\":\\\"ping\\\"}\\n'); data=s.recv(4096); s.close(); r=json.loads(data); raise SystemExit(0 if r.get('status') == 'ok' else 1)"
 
-RUN groupadd -g $GID $USERNAME || true
-RUN useradd -m -s /bin/bash -u $USER_UID -g $GID $USERNAME || true
-
-# Set proper permissions
-RUN chown -R $USERNAME:$GID /app
-USER $USERNAME
-
-# Set environment variables
-ENV PYTHONPATH=/app/src
-ENV PYTHONUNBUFFERED=1
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)" || exit 1
-
-# Expose audio socket path for Linux
-ENV PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native
-
-# Labels for metadata
-LABEL maintainer="Rodolfo <rodolfonobregar@gmail.com>"
-LABEL description="Multi-provider audio transcription service"
-LABEL version="0.2.0"
-LABEL org.opencontainers.image.source="https://github.com/rodolfonobrega/audioscribe"
-
-# Default command
-ENTRYPOINT ["python", "-m", "audioscribe.cli"]
-
-# Default arguments
-CMD ["start"]
+ENTRYPOINT ["python", "main.py"]
+CMD ["--server", "--no-keyboard", "--output", "stdout"]

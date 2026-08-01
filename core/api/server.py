@@ -21,6 +21,7 @@ class AudioScribeServer:
         self.clients = set()
         self.server = None
         self._loop = None
+        self.config = getattr(orchestrator, "config", None) if orchestrator else None
         if orchestrator:
             self.set_orchestrator(orchestrator)
 
@@ -97,6 +98,17 @@ class AudioScribeServer:
             except Exception as exc:
                 return {"status": "error", "error": str(exc), "code": "audio_devices_unavailable"}
 
+        if command == "set_device":
+            audio = self.orchestrator.audio_input if self.orchestrator else None
+            if not audio or not hasattr(audio, "set_device"):
+                return {"status": "error", "code": "audio_unavailable", "error": "Entrada de áudio indisponível."}
+            try:
+                device_index = params.get("device_index")
+                audio.set_device(None if device_index in (None, "") else int(device_index))
+                return {"status": "ok", "device_index": audio.device_index}
+            except (TypeError, ValueError) as exc:
+                return {"status": "error", "code": "invalid_device", "error": str(exc)}
+
         if command == "get_models":
             return await self._get_models()
 
@@ -105,7 +117,7 @@ class AudioScribeServer:
             return {"status": "ok", "summary": store.summary() if store else {"requests": 0, "cost_known": False, "by_model": []}}
 
         if command == "preflight":
-            return await self._preflight()
+            return await self._preflight(deep=bool(params.get("deep")))
 
         if command == "configure_provider":
             return self._configure_provider(params)
@@ -143,7 +155,7 @@ class AudioScribeServer:
 
         return {"status": "error", "code": "unknown_command", "error": f"Unknown command: {command}"}
 
-    async def _preflight(self) -> Dict[str, Any]:
+    async def _preflight(self, deep: bool = False) -> Dict[str, Any]:
         checker = PreflightChecker(config=self.config)
         ready = checker.check_all()
         checks = []
@@ -159,8 +171,21 @@ class AudioScribeServer:
                 try:
                     if name == "output" and not component.is_available():
                         raise RuntimeError("output handler indisponível")
-                    await asyncio.to_thread(component.health_check)
-                    checks.append({"component": name, "status": "ok", "model": getattr(component, "model", None)})
+                    if deep:
+                        health_check = getattr(component, "health_check", None)
+                        if callable(health_check):
+                            await asyncio.to_thread(health_check)
+                        checks.append({"component": name, "status": "ok", "model": getattr(component, "model", None), "verified": True})
+                    elif name == "output":
+                        checks.append({"component": name, "status": "ok", "verified": True})
+                    else:
+                        checks.append({
+                            "component": name,
+                            "status": "ok",
+                            "model": getattr(component, "model", None),
+                            "verified": False,
+                            "message": "Live provider test skipped; use the recording action to verify the selected model.",
+                        })
                 except Exception as exc:
                     ready = False
                     checks.append({"component": name, "status": "error", "error": str(exc), "model": getattr(component, "model", None)})
@@ -170,6 +195,20 @@ class AudioScribeServer:
         config = self.config
         if not config:
             return {"status": "error", "code": "config_unavailable", "error": "Configuração do engine indisponível."}
+        if not config.transcription.base_url:
+            configured = []
+            for model in config.transcription.model_chain:
+                configured.append({"id": model, "name": model, "provider": config.transcription.provider, "local": False, "source": "configured"})
+            return {
+                "status": "ok",
+                "models": configured,
+                "llm_models": [{"id": model, "name": model, "provider": config.llm.provider if config.llm else config.transcription.provider, "local": False, "source": "configured"} for model in (config.llm.model_chain if config.llm else [])],
+                "configured": {
+                    "transcription": config.transcription.model_chain,
+                    "llm": config.llm.model_chain if config.llm else [],
+                },
+                "discovery": "provider model list unavailable without an explicit base URL",
+            }
         try:
             transcription = discover_models(
                 config.transcription.base_url,
@@ -181,6 +220,7 @@ class AudioScribeServer:
         return {
             "status": "ok",
             "models": transcription,
+            "llm_models": transcription,
             "configured": {
                 "transcription": config.transcription.model_chain,
                 "llm": config.llm.model_chain if config.llm else [],
@@ -221,7 +261,10 @@ class AudioScribeServer:
             "base_url": config.transcription.base_url,
             "transcription_model": config.transcription.model,
             "llm_model": config.llm.model if config.llm else None,
-            "api_key_configured": bool(config.transcription.api_key or config.llm and config.llm.api_key),
+            "api_key_configured": bool(
+                getattr(config.transcription, "api_key", None)
+                or (getattr(config.llm, "api_key", None) if config.llm else None)
+            ),
         }
 
     async def start(self):

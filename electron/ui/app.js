@@ -1,507 +1,365 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- 1. THEME SWITCHER (DARK / LIGHT) ---
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    const themeIcon = document.getElementById('theme-icon');
-    const themeLabel = document.getElementById('theme-label');
-    const rootEl = document.documentElement;
+    const $ = (id) => document.getElementById(id);
+    const root = document.documentElement;
+    const api = window.api;
 
+    // Theme and navigation
     const savedTheme = localStorage.getItem('audioscribe_theme') || 'dark';
-    setTheme(savedTheme);
-
-    themeBtn.addEventListener('click', () => {
-        const currentTheme = rootEl.getAttribute('data-theme');
-        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        setTheme(newTheme);
-    });
-
-    function setTheme(theme) {
-        rootEl.setAttribute('data-theme', theme);
+    const setTheme = (theme) => {
+        root.setAttribute('data-theme', theme);
         localStorage.setItem('audioscribe_theme', theme);
-        if (theme === 'light') {
-            themeIcon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path></svg>';
-            themeLabel.textContent = 'Light mode';
-        } else {
-            themeIcon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8 8 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z"></path></svg>';
-            themeLabel.textContent = 'Dark mode';
-        }
-    }
+        $('theme-label').textContent = theme === 'light' ? 'Light mode' : 'Dark mode';
+        $('theme-icon').innerHTML = theme === 'light'
+            ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>'
+            : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z"></path></svg>';
+    };
+    setTheme(savedTheme);
+    $('theme-toggle-btn')?.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
+    document.querySelectorAll('.nav-btn').forEach((button) => button.addEventListener('click', () => {
+        document.querySelectorAll('.nav-btn').forEach((item) => item.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        $(`tab-${button.dataset.tab}`)?.classList.add('active');
+    }));
 
-    // --- 2. NAVIGATION TABS ---
-    const navButtons = document.querySelectorAll('.nav-btn');
-    const tabContents = document.querySelectorAll('.tab-content');
-
-    navButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            navButtons.forEach(b => b.classList.remove('active'));
-            tabContents.forEach(t => t.classList.remove('active'));
-
-            btn.classList.add('active');
-            const tabId = `tab-${btn.dataset.tab}`;
-            document.getElementById(tabId).classList.add('active');
-        });
-    });
-
-    // --- 3. SYSTEM HEALTH PRE-FLIGHT CHECK ---
-    const statusBar = document.getElementById('system-status-bar');
-    const statusMsg = document.getElementById('status-msg');
-    const warningCard = document.getElementById('preflight-warning-card');
-    const warningText = document.getElementById('preflight-warning-text');
-    const fixConfigBtn = document.getElementById('fix-config-btn');
-    
-    const providerSelect = document.getElementById('provider-select');
-    const apiKeyGroup = document.getElementById('api-key-group');
-    const apiKeyInput = document.getElementById('api-key-input');
-    const apiKeyLabel = document.getElementById('api-key-label');
-    const apiKeyHint = document.getElementById('api-key-hint');
-    const baseUrlGroup = document.getElementById('base-url-group');
-    const baseUrlInput = document.getElementById('base-url-input');
-
-    // Load saved Provider settings
-    const savedProvider = localStorage.getItem('audioscribe_provider') || 'groq';
-    const savedApiKey = localStorage.getItem('audioscribe_api_key') || '';
-    const savedBaseUrl = localStorage.getItem('audioscribe_base_url') || 'http://localhost:11434/v1';
-
-    providerSelect.value = savedProvider;
-    apiKeyInput.value = savedApiKey;
-    baseUrlInput.value = savedBaseUrl;
-
-    function handleProviderUIChange() {
-        const val = providerSelect.value;
-        if (val === 'ollama') {
-            apiKeyGroup.classList.add('hidden');
-            baseUrlGroup.classList.remove('hidden');
-            baseUrlInput.value = 'http://localhost:11434/v1';
-        } else if (val === 'custom') {
-            apiKeyGroup.classList.remove('hidden');
-            baseUrlGroup.classList.remove('hidden');
-            apiKeyLabel.textContent = 'API Key (Optional)';
-            apiKeyHint.textContent = 'Leave empty if your local endpoint does not require authentication.';
-        } else if (val === 'openai') {
-            apiKeyGroup.classList.remove('hidden');
-            baseUrlGroup.classList.add('hidden');
-            apiKeyLabel.textContent = 'OpenAI API Key';
-            apiKeyHint.textContent = 'Enter key from platform.openai.com/api-keys';
-        } else { // groq
-            apiKeyGroup.classList.remove('hidden');
-            baseUrlGroup.classList.add('hidden');
-            apiKeyLabel.textContent = 'Groq API Key (Free)';
-            apiKeyHint.textContent = 'Enter free key from console.groq.com/keys';
-        }
-    }
-
-    providerSelect.addEventListener('change', () => {
-        handleProviderUIChange();
-        runPreflightCheck();
-    });
-
-    handleProviderUIChange();
-
-    function runPreflightCheck() {
-        const provider = providerSelect.value;
-        const apiKey = apiKeyInput.value.trim();
-        const baseUrl = baseUrlInput.value.trim();
-
-        const isLocal = provider === 'ollama' || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
-
-        if (!isLocal && !apiKey) {
-            const providerName = provider === 'openai' ? 'OpenAI' : 'Groq';
-            statusBar.className = 'system-status-bar error';
-            statusMsg.textContent = `Action Required: Missing ${providerName} API Key`;
-            warningText.textContent = `Please enter your ${providerName} API Key in Settings or switch to Localhost Ollama.`;
-            warningCard.classList.remove('hidden');
-            return false;
-        } else {
-            statusBar.className = 'system-status-bar';
-            const label = isLocal ? 'Localhost Ollama' : (provider === 'openai' ? 'OpenAI API' : 'Groq API');
-            statusMsg.textContent = `${label} Ready • Press F9 to Dictate`;
-            warningCard.classList.add('hidden');
-            return true;
-        }
-    }
-
-    runPreflightCheck();
-
-    fixConfigBtn.addEventListener('click', () => {
-        document.querySelector('[data-tab="settings"]').click();
-        apiKeyInput.focus();
-    });
-
-    const runPreflightBtn = document.getElementById('run-preflight-btn');
-    const diagResults = document.getElementById('diag-results');
-    runPreflightBtn?.addEventListener('click', () => {
-        const ready = runPreflightCheck();
-        if (diagResults) {
-            diagResults.innerHTML = ready
-                ? '<p class="diag-ok">System Ready. Microphone hardware, provider, and basic configuration are operational.</p>'
-                : '<p class="diag-error">Diagnostic check found an issue. Please review the error message above.</p>';
-        }
-    });
-
-    // Save Settings
-    const saveSettingsBtn = document.getElementById('save-settings-btn');
-    saveSettingsBtn.addEventListener('click', () => {
-        localStorage.setItem('audioscribe_provider', providerSelect.value);
-        localStorage.setItem('audioscribe_api_key', apiKeyInput.value.trim());
-        localStorage.setItem('audioscribe_base_url', baseUrlInput.value.trim());
-        runPreflightCheck();
-        alert('Settings saved successfully.');
-    });
-
-    // --- 4. INTERACTIVE MULTI-KEY HOTKEY RECORDER ---
-    const hotkeyInput = document.getElementById('hotkey-recorder-input');
-    const recordHotkeyBtn = document.getElementById('record-hotkey-btn');
-    const activeHotkeyBadge = document.getElementById('active-hotkey-badge');
-    let isRecordingHotkey = false;
-
-    const savedShortcut = localStorage.getItem('audioscribe_shortcut') || 'F9';
-    hotkeyInput.value = savedShortcut;
-    activeHotkeyBadge.textContent = savedShortcut;
-
-    recordHotkeyBtn.addEventListener('click', () => {
-        isRecordingHotkey = true;
-        hotkeyInput.value = 'Press key combination...';
-        recordHotkeyBtn.textContent = 'Listening...';
-        recordHotkeyBtn.dataset.listening = 'true';
-    });
-
-    function formatElectronKey(e) {
-        const isModifierKey = ['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(e.key);
-
-        const modifiers = [];
-        if (e.ctrlKey) modifiers.push('CommandOrControl');
-        if (e.altKey) modifiers.push('Alt');
-        if (e.shiftKey) modifiers.push('Shift');
-        if (e.metaKey) modifiers.push('Super');
-
-        const uniqueModifiers = [...new Set(modifiers)];
-
-        if (isModifierKey) {
-            const prettyMods = uniqueModifiers.map(m => m === 'CommandOrControl' ? 'Ctrl' : m);
-            return {
-                isComplete: false,
-                preview: prettyMods.length > 0 ? prettyMods.join(' + ') + ' + ...' : 'Listening...'
-            };
-        }
-
-        let keyName = '';
-        if (e.code.startsWith('Key')) {
-            keyName = e.code.replace('Key', '').toUpperCase();
-        } else if (e.code.startsWith('Digit')) {
-            keyName = e.code.replace('Digit', '');
-        } else if (e.code.startsWith('F') && e.code.length <= 3) {
-            keyName = e.code;
-        } else if (e.code === 'Space' || e.key === ' ') {
-            keyName = 'Space';
-        } else if (e.code === 'Tab') {
-            keyName = 'Tab';
-        } else if (e.code === 'Escape') {
-            keyName = 'Escape';
-        } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
-            keyName = 'Return';
-        } else if (e.code === 'Backspace') {
-            keyName = 'Backspace';
-        } else if (e.code === 'Delete') {
-            keyName = 'Delete';
-        } else {
-            keyName = e.key.toUpperCase();
-        }
-
-        const acceleratorParts = [...uniqueModifiers, keyName];
-        const prettyParts = uniqueModifiers.map(m => m === 'CommandOrControl' ? 'Ctrl' : m).concat(keyName);
-
-        return {
-            isComplete: true,
-            accelerator: acceleratorParts.join('+'),
-            pretty: prettyParts.join('+')
-        };
-    }
-
-    document.addEventListener('keydown', async (e) => {
-        if (!isRecordingHotkey) return;
-        e.preventDefault();
-        e.stopPropagation();
-
-        const result = formatElectronKey(e);
-        if (!result.isComplete) {
-            hotkeyInput.value = result.preview;
-        } else {
-            isRecordingHotkey = false;
-            hotkeyInput.value = result.pretty;
-            recordHotkeyBtn.textContent = 'Record Hotkey';
-            delete recordHotkeyBtn.dataset.listening;
-
-            if (window.api && window.api.registerShortcut) {
-                const res = await window.api.registerShortcut(result.accelerator);
-                if (res && res.status === 'ok') {
-                    activeHotkeyBadge.textContent = result.pretty;
-                    const sidebarHotkey = document.getElementById('sidebar-hotkey');
-                    if (sidebarHotkey) sidebarHotkey.textContent = result.pretty;
-                    localStorage.setItem('audioscribe_shortcut', result.pretty);
-                    console.log(`[Hotkey] Successfully registered ${result.accelerator}`);
-                } else {
-                    const err = (res && res.error) || 'Invalid key combination';
-                    alert(`Could not register shortcut '${result.pretty}': ${err}`);
-                    hotkeyInput.value = savedShortcut;
-                    activeHotkeyBadge.textContent = savedShortcut;
-                }
-            }
-        }
-    });
-
-    // --- 5. POST-PROCESSING PROFILES & DEDICATED HOTKEYS MANAGER ---
-    const defaultProfiles = [
-        {
-            id: 'prof_std',
-            name: '📝 Standard Grammar & Polish',
-            enabled: true,
-            shortcut: 'F9',
-            prompt: 'Fix grammar, punctuation, and speech errors while preserving exact meaning. Output ONLY polished text.'
-        },
-        {
-            id: 'prof_trans',
-            name: '🌐 Translate to English',
-            enabled: true,
-            shortcut: 'Ctrl+Shift+E',
-            prompt: 'Translate the transcribed audio into natural, professional English. Output ONLY the translated text.'
-        },
-        {
-            id: 'prof_summary',
-            name: '📋 Bullet Point Summary',
-            enabled: true,
-            shortcut: 'Ctrl+Shift+S',
-            prompt: 'Summarize the spoken audio into clean, structured markdown bullet points.'
-        },
-        {
-            id: 'prof_code',
-            name: '💻 Code & Technical Formatter',
-            enabled: true,
-            shortcut: 'Ctrl+Shift+C',
-            prompt: 'Format code snippets, technical explanations, and variable names cleanly in markdown.'
-        }
-    ];
-
-    let profiles = JSON.parse(localStorage.getItem('audioscribe_profiles') || 'null') || defaultProfiles;
-    const profilesListEl = document.getElementById('profiles-list');
-    const addProfileBtn = document.getElementById('add-profile-btn');
-
-    function saveProfiles() {
-        localStorage.setItem('audioscribe_profiles', JSON.stringify(profiles));
-        if (window.api && window.api.updateProfiles) {
-            window.api.updateProfiles(profiles);
-        }
-    }
-
-    saveProfiles();
-
-    function renderProfiles() {
-        if (!profilesListEl) return;
-        profilesListEl.innerHTML = '';
-
-        profiles.forEach(prof => {
-            const card = document.createElement('div');
-            card.className = 'profile-card';
-            card.innerHTML = `
-                <div class="profile-header-row">
-                    <div class="profile-title-group">
-                        <input type="checkbox" ${prof.enabled ? 'checked' : ''} data-id="${prof.id}" class="profile-enable-check">
-                        <span class="profile-title">${prof.name}</span>
-                    </div>
-                    <button class="btn-danger-sm delete-prof-btn" data-id="${prof.id}">Delete</button>
-                </div>
-                <div class="form-group">
-                    <label>System Prompt Rule</label>
-                    <textarea class="profile-prompt-preview" data-id="${prof.id}" rows="2">${prof.prompt}</textarea>
-                </div>
-                <div class="profile-actions-row">
-                    <div class="profile-hotkey-group">
-                        <span>Dedicated Shortcut:</span>
-                        <kbd class="hotkey-badge">${prof.shortcut || 'None'}</kbd>
-                        <button class="btn-secondary record-prof-shortcut-btn" data-id="${prof.id}">Change Shortcut</button>
-                    </div>
-                    <button class="btn-primary-sm save-prof-btn" data-id="${prof.id}">Save & Apply</button>
-                </div>
-            `;
-            profilesListEl.appendChild(card);
-        });
-
-        // Add Event Listeners for inline editing
-        profilesListEl.querySelectorAll('.save-prof-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.target.getAttribute('data-id');
-                const prof = profiles.find(p => p.id === id);
-                if (prof) {
-                    const card = e.target.closest('.profile-card');
-                    const promptArea = card.querySelector('.profile-prompt-preview');
-                    const check = card.querySelector('.profile-enable-check');
-                    prof.prompt = promptArea.value.trim();
-                    prof.enabled = check.checked;
-                    saveProfiles();
-                    alert(`Profile "${prof.name}" saved successfully. Shortcut: ${prof.shortcut}`);
-                }
-            });
-        });
-
-        profilesListEl.querySelectorAll('.delete-prof-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.target.getAttribute('data-id');
-                if (confirm('Delete this post-processing profile?')) {
-                    profiles = profiles.filter(p => p.id !== id);
-                    saveProfiles();
-                    renderProfiles();
-                }
-            });
-        });
-
-        profilesListEl.querySelectorAll('.record-prof-shortcut-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.target.getAttribute('data-id');
-                const prof = profiles.find(p => p.id === id);
-                if (!prof) return;
-
-                const newKey = prompt(`Enter new shortcut for "${prof.name}":\n(e.g., Ctrl+Shift+E, Alt+R, F9)`, prof.shortcut);
-                if (newKey && newKey.trim()) {
-                    prof.shortcut = newKey.trim();
-                    saveProfiles();
-                    renderProfiles();
-                }
-            });
-        });
-    }
-
-    renderProfiles();
-
-    if (addProfileBtn) {
-        addProfileBtn.addEventListener('click', () => {
-            const name = prompt('New profile name:', '✨ Custom Rule');
-            if (!name) return;
-            const promptText = prompt('System prompt instruction for the AI:', 'Revise and clean up text...');
-            if (!promptText) return;
-
-            const newProf = {
-                id: 'prof_' + Date.now(),
-                name: name.trim(),
-                enabled: true,
-                shortcut: 'Ctrl+Alt+' + (profiles.length + 1),
-                prompt: promptText.trim()
-            };
-            profiles.push(newProf);
-            saveProfiles();
-            renderProfiles();
-        });
-    }
-
-    // --- 5. PRODUCTIVITY STATS TRACKING ---
-    const metricWordsEl = document.getElementById('metric-words');
-    const metricTimeSavedEl = document.getElementById('metric-time-saved');
-    const metricLatencyEl = document.getElementById('metric-latency');
-
-    let totalWords = parseInt(localStorage.getItem('audioscribe_total_words') || '0', 10);
-    let totalLatencyMs = parseInt(localStorage.getItem('audioscribe_total_latency') || '320', 10);
-    let totalTranscriptions = parseInt(localStorage.getItem('audioscribe_count') || '1', 10);
-
-    function updateMetricCards() {
-        metricWordsEl.textContent = totalWords.toLocaleString();
-        
-        // Time saved formula: (Words / 40 WPM typing) - (Words / 150 WPM speaking)
-        const typingMinutes = totalWords / 40;
-        const speechMinutes = totalWords / 150;
-        const minutesSaved = Math.max(0, Math.round(typingMinutes - speechMinutes));
-        
-        if (minutesSaved >= 60) {
-            const hours = (minutesSaved / 60).toFixed(1);
-            metricTimeSavedEl.textContent = `${hours} hrs`;
-        } else {
-            metricTimeSavedEl.textContent = `${minutesSaved} min`;
-        }
-
-        const avgLatency = Math.round(totalLatencyMs / totalTranscriptions);
-        metricLatencyEl.textContent = `${avgLatency} ms`;
-    }
-
-    updateMetricCards();
-
-    function recordNewTranscription(text, latencyMs = 320) {
-        if (!text) return;
-        const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-        
-        totalWords += wordCount;
-        totalLatencyMs += latencyMs;
-        totalTranscriptions += 1;
-
-        localStorage.setItem('audioscribe_total_words', totalWords.toString());
-        localStorage.setItem('audioscribe_total_latency', totalLatencyMs.toString());
-        localStorage.setItem('audioscribe_count', totalTranscriptions.toString());
-
-        updateMetricCards();
-    }
-
-    // --- 6. RECORDING CONTROL WITH PRE-FLIGHT VALIDATION ---
-    const recordBtn = document.getElementById('record-toggle-btn');
-    const recordLabel = document.getElementById('record-btn-label');
-    const recordActionLabel = document.getElementById('record-action-label');
-    const historyList = document.getElementById('transcription-list');
+    const statusBar = $('system-status-bar');
+    const statusMsg = $('status-msg');
+    const warningCard = $('preflight-warning-card');
+    const warningText = $('preflight-warning-text');
+    const providerSelect = $('provider-select');
+    const apiKeyInput = $('api-key-input');
+    const apiKeyGroup = $('api-key-group');
+    const apiKeyLabel = $('api-key-label');
+    const apiKeyHint = $('api-key-hint');
+    const baseUrlGroup = $('base-url-group');
+    const baseUrlInput = $('base-url-input');
+    const transcriptionModelSelect = $('transcription-model-select');
+    const llmModelSelect = $('llm-model-select');
+    const recordBtn = $('record-toggle-btn');
+    const recordLabel = $('record-btn-label');
+    const recordActionLabel = $('record-action-label');
+    const historyList = $('transcription-list');
     let isRecording = false;
 
-    recordBtn.addEventListener('click', async () => {
-        // Run Pre-flight Check First!
-        const isReady = runPreflightCheck();
-        if (!isReady) {
-            return; // Abort recording if pre-flight fails!
-        }
+    const setSystemStatus = (kind, message) => {
+        statusBar.className = `system-status-bar ${kind || ''}`.trim();
+        statusMsg.textContent = message;
+    };
 
-        isRecording = !isRecording;
-        updateRecordState(isRecording);
+    const updateRecordState = (recording) => {
+        isRecording = Boolean(recording);
+        recordBtn.classList.toggle('recording', isRecording);
+        recordBtn.closest('.record-card')?.classList.toggle('recording', isRecording);
+        recordLabel.textContent = isRecording ? 'Recording now' : 'Start recording';
+        recordActionLabel.textContent = isRecording ? 'Stop recording' : 'Start dictating';
+    };
 
-        if (window.api) {
-            const command = isRecording ? 'start_recording' : 'stop_recording';
-            await window.api.sendCommand(command);
-        }
-    });
-
-    function updateRecordState(recording) {
-        isRecording = recording;
-        if (recording) {
-            recordBtn.classList.add('recording');
-            recordBtn.closest('.record-card')?.classList.add('recording');
-            recordLabel.textContent = 'Recording now';
-            if (recordActionLabel) recordActionLabel.textContent = 'Stop Recording';
+    const updateProviderUI = () => {
+        const provider = providerSelect.value;
+        const local = provider === 'ollama' || provider === 'custom';
+        apiKeyGroup.classList.toggle('hidden', provider === 'ollama');
+        baseUrlGroup.classList.toggle('hidden', !local);
+        if (provider === 'ollama' && !baseUrlInput.value) baseUrlInput.value = 'http://localhost:11434/v1';
+        if (provider === 'custom') {
+            apiKeyLabel.textContent = 'API Key (optional)';
+            apiKeyHint.textContent = 'Leave empty if your endpoint does not require authentication.';
+        } else if (provider === 'openai') {
+            apiKeyLabel.textContent = 'OpenAI API Key';
+            apiKeyHint.textContent = 'The key is encrypted by the desktop process.';
         } else {
-            recordBtn.classList.remove('recording');
-            recordBtn.closest('.record-card')?.classList.remove('recording');
-            recordLabel.textContent = 'Start recording';
-            if (recordActionLabel) recordActionLabel.textContent = 'Start Dictating';
+            apiKeyLabel.textContent = 'Groq API Key';
+            apiKeyHint.textContent = 'The key is encrypted by the desktop process.';
         }
-    }
+    };
 
-    // Listen to Engine Events from Main process
-    if (window.api && window.api.onEngineEvent) {
-        window.api.onEngineEvent((eventData) => {
-            if (eventData.event === 'transcription_result') {
-                const text = eventData.data.text;
-                const latency = eventData.data.latency_ms || 320;
-                
-                recordNewTranscription(text, latency);
+    const addOption = (select, value, label, selected = false) => {
+        if (!select || !value) return;
+        let option = [...select.options].find((item) => item.value === value);
+        if (!option) {
+            option = document.createElement('option');
+            option.value = value;
+            option.textContent = label || value;
+            select.appendChild(option);
+        }
+        option.selected = selected;
+    };
 
-                // Add to UI history list
-                const item = document.createElement('div');
-                item.className = 'transcription-item';
-                const timeStr = new Date().toLocaleTimeString();
-                item.innerHTML = `<div class="meta">${timeStr} · ${latency} ms</div><div class="body">${text}</div>`;
-                
-                const emptyState = document.getElementById('empty-history-state');
-                if (emptyState) emptyState.remove();
+    const refreshModels = async () => {
+        if (!api?.sendCommand) return null;
+        const result = await api.sendCommand('get_models');
+        if (result?.status !== 'ok') {
+            setSystemStatus('error', result?.error || 'Could not query models');
+            return result;
+        }
+        const configured = result.configured || {};
+        transcriptionModelSelect.innerHTML = '';
+        (result.models || []).forEach((model) => addOption(transcriptionModelSelect, model.id, model.name));
+        (configured.transcription || []).forEach((model) => addOption(transcriptionModelSelect, model, `${model} (configured)`));
+        if (configured.transcription?.[0]) transcriptionModelSelect.value = configured.transcription[0];
+        llmModelSelect.innerHTML = '';
+        (result.llm_models || result.models || []).forEach((model) => addOption(llmModelSelect, model.id, model.name));
+        (configured.llm || []).forEach((model) => addOption(llmModelSelect, model));
+        if (configured.llm?.[0]) llmModelSelect.value = configured.llm[0];
+        return result;
+    };
 
-                historyList.prepend(item);
-            }
-        });
-    }
+    const runPreflightCheck = async (deep = false) => {
+        if (!api?.sendCommand) {
+            setSystemStatus('error', 'Engine bridge unavailable');
+            return false;
+        }
+        setSystemStatus('', 'Checking engine, microphone, provider and models...');
+        const result = await api.sendCommand('preflight', { deep });
+        if (result?.status !== 'ok') {
+            setSystemStatus('error', result?.error || 'Engine is offline');
+            warningText.textContent = result?.error || 'The engine did not respond.';
+            warningCard.classList.remove('hidden');
+            return false;
+        }
+        const failedCheck = result.checks?.find((check) => check.status === 'error');
+        if (!result.ready) {
+            setSystemStatus('error', 'Action required before recording');
+            warningText.textContent = result.errors?.[0]?.issue || failedCheck?.error || 'Review Diagnostics for the repair action.';
+            warningCard.classList.remove('hidden');
+            return false;
+        }
+        const live = result.checks?.some((check) => check.verified);
+        setSystemStatus('', live ? 'Engine ready · checks passed' : 'Configuration loaded · live test runs on recording');
+        warningCard.classList.add('hidden');
+        return true;
+    };
 
-    // Clear History
-    const clearHistoryBtn = document.getElementById('clear-history-btn');
-    clearHistoryBtn.addEventListener('click', () => {
-        historyList.innerHTML = '<div class="empty-state" id="empty-history-state"><span class="empty-line"></span><p>Your recent dictations will appear here.</p><small>Press <kbd>F9</kbd> anywhere on your computer to start dictating.</small></div>';
+    const loadProviderConfig = async () => {
+        const result = await api?.getProviderConfig?.();
+        const config = result?.config;
+        if (!config) return;
+        if (config.provider) providerSelect.value = config.provider;
+        if (config.base_url) baseUrlInput.value = config.base_url;
+        if (config.api_key === 'configured') {
+            apiKeyInput.placeholder = 'Stored securely · leave blank to keep';
+            apiKeyInput.dataset.configured = 'true';
+        }
+        updateProviderUI();
+        addOption(transcriptionModelSelect, config.transcription_model, config.transcription_model, true);
+        addOption(llmModelSelect, config.llm_model, config.llm_model, true);
+    };
+
+    providerSelect.value = localStorage.getItem('audioscribe_provider') || 'groq';
+    baseUrlInput.value = localStorage.getItem('audioscribe_base_url') || '';
+    // Migrate the old plaintext renderer secret out of localStorage.
+    localStorage.removeItem('audioscribe_api_key');
+    providerSelect.addEventListener('change', async () => {
+        updateProviderUI();
+        await refreshModels();
+        await runPreflightCheck();
+    });
+    updateProviderUI();
+
+    const refreshDevices = async () => {
+        const select = $('audio-device-select');
+        if (!select || !api?.sendCommand) return;
+        const result = await api.sendCommand('get_devices');
+        select.innerHTML = '';
+        addOption(select, '', 'System default microphone', true);
+        if (result?.status === 'ok') {
+            (result.devices || []).forEach((device) => addOption(select, String(device.index), `${device.name} (${device.channels} ch)`));
+        }
+    };
+    $('audio-device-select')?.addEventListener('change', async (event) => {
+        const result = await api?.sendCommand?.('set_device', { device_index: event.target.value });
+        if (result?.status !== 'ok') setSystemStatus('error', result?.error || 'Could not change microphone');
     });
 
-    const sidebarHotkey = document.getElementById('sidebar-hotkey');
-    if (sidebarHotkey) sidebarHotkey.textContent = savedShortcut;
+    $('fix-config-btn')?.addEventListener('click', () => {
+        document.querySelector('[data-tab="settings"]')?.click();
+        apiKeyInput.focus();
+    });
+    $('run-preflight-btn')?.addEventListener('click', async () => {
+        const ready = await runPreflightCheck();
+        const output = $('diag-results');
+        output.textContent = ready ? 'System ready. All required engine checks passed.' : 'A blocking issue was found. See the warning above.';
+        output.className = `diag-output-box ${ready ? 'diag-ok' : 'diag-error'}`;
+    });
+
+    $('save-settings-btn')?.addEventListener('click', async () => {
+        const button = $('save-settings-btn');
+        button.disabled = true;
+        const config = {
+            provider: providerSelect.value,
+            base_url: baseUrlInput.value.trim() || null,
+            transcription_model: transcriptionModelSelect.value || undefined,
+            llm_model: llmModelSelect.value || undefined,
+        };
+        if (apiKeyInput.value.trim()) config.api_key = apiKeyInput.value.trim();
+        else if (providerSelect.value === 'ollama') config.api_key = null;
+        const result = await api?.saveProviderConfig?.(config);
+        if (result?.status === 'ok') {
+            localStorage.setItem('audioscribe_provider', providerSelect.value);
+            localStorage.setItem('audioscribe_base_url', baseUrlInput.value.trim());
+            await refreshModels();
+            await runPreflightCheck();
+            alert('Settings saved and applied to the engine.');
+        } else {
+            alert(result?.error || 'Could not apply settings to the engine.');
+        }
+        button.disabled = false;
+    });
+
+    // Global hotkey recorder
+    let listeningForHotkey = false;
+    const prettyKey = (event) => {
+        const modifiers = [];
+        if (event.ctrlKey) modifiers.push('Ctrl');
+        if (event.altKey) modifiers.push('Alt');
+        if (event.shiftKey) modifiers.push('Shift');
+        if (event.metaKey) modifiers.push('Super');
+        const key = event.code.startsWith('Key') ? event.code.slice(3) : event.code.startsWith('Digit') ? event.code.slice(5) : event.code;
+        return { accelerator: [...modifiers, key].join('+'), pretty: [...modifiers, key].join(' + ') };
+    };
+    const shortcut = localStorage.getItem('audioscribe_shortcut') || 'F9';
+    $('hotkey-recorder-input').value = shortcut;
+    $('active-hotkey-badge').textContent = shortcut;
+    $('sidebar-hotkey').textContent = shortcut;
+    $('record-hotkey-btn')?.addEventListener('click', () => {
+        listeningForHotkey = true;
+        $('hotkey-recorder-input').value = 'Press a key combination...';
+    });
+    document.addEventListener('keydown', async (event) => {
+        if (!listeningForHotkey) return;
+        event.preventDefault();
+        const result = prettyKey(event);
+        if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return;
+        listeningForHotkey = false;
+        const response = await api?.registerShortcut?.(result.accelerator);
+        if (response?.status === 'ok') {
+            $('hotkey-recorder-input').value = result.pretty;
+            $('active-hotkey-badge').textContent = result.pretty;
+            $('sidebar-hotkey').textContent = result.pretty;
+            localStorage.setItem('audioscribe_shortcut', result.pretty);
+        } else {
+            $('hotkey-recorder-input').value = shortcut;
+            alert(response?.error || 'Could not register shortcut.');
+        }
+    });
+
+    // Profiles are kept local, but rendered without interpolating user text into HTML.
+    const defaultProfiles = [
+        { id: 'prof_std', name: 'Review and clarity', enabled: true, shortcut: 'F9', prompt: 'Fix grammar, punctuation and filler words while preserving meaning. Return only the revised text.' },
+        { id: 'prof_trans', name: 'Translate to English', enabled: true, shortcut: 'Ctrl+Shift+E', prompt: 'Translate the transcription into natural professional English. Return only the translation.' },
+    ];
+    let profiles;
+    try { profiles = JSON.parse(localStorage.getItem('audioscribe_profiles') || 'null') || defaultProfiles; } catch { profiles = defaultProfiles; }
+    const saveProfiles = () => {
+        localStorage.setItem('audioscribe_profiles', JSON.stringify(profiles));
+        api?.updateProfiles?.(profiles);
+    };
+    const renderProfiles = () => {
+        const list = $('profiles-list');
+        if (!list) return;
+        list.textContent = '';
+        profiles.forEach((profile) => {
+            const card = document.createElement('div');
+            card.className = 'profile-card';
+            const heading = document.createElement('div');
+            heading.className = 'profile-header-row';
+            const title = document.createElement('span');
+            title.className = 'profile-title';
+            title.textContent = profile.name;
+            const enabled = document.createElement('input');
+            enabled.type = 'checkbox'; enabled.checked = Boolean(profile.enabled); enabled.className = 'profile-enable-check';
+            heading.append(enabled, title);
+            const prompt = document.createElement('textarea');
+            prompt.className = 'profile-prompt-preview'; prompt.rows = 2; prompt.value = profile.prompt;
+            const actions = document.createElement('div'); actions.className = 'profile-actions-row';
+            const hotkey = document.createElement('span'); hotkey.className = 'profile-hotkey-group'; hotkey.textContent = `Shortcut: ${profile.shortcut || 'none'}`;
+            const save = document.createElement('button');
+            save.className = 'btn-primary-sm'; save.textContent = 'Save & Apply';
+            save.addEventListener('click', () => { profile.prompt = prompt.value.trim(); profile.enabled = enabled.checked; saveProfiles(); });
+            actions.append(hotkey, save);
+            card.append(heading, prompt, actions);
+            list.appendChild(card);
+        });
+    };
+    renderProfiles();
+    $('add-profile-btn')?.addEventListener('click', () => {
+        const name = prompt('Profile name:', 'Custom rule');
+        const promptText = name && prompt('Profile instruction:', 'Review and organize the text...');
+        if (!name || !promptText) return;
+        profiles.push({ id: `prof_${Date.now()}`, name: name.trim(), enabled: true, shortcut: `Ctrl+Alt+${profiles.length + 1}`, prompt: promptText.trim() });
+        saveProfiles(); renderProfiles();
+    });
+
+    // Productivity and cost metrics
+    let totalWords = Number(localStorage.getItem('audioscribe_total_words') || 0);
+    let totalLatency = 0;
+    let totalTranscriptions = 0;
+    const updateMetrics = () => {
+        $('metric-words').textContent = totalWords.toLocaleString();
+        const saved = Math.max(0, Math.round(totalWords / 40 - totalWords / 150));
+        $('metric-time-saved').textContent = saved >= 60 ? `${(saved / 60).toFixed(1)} hrs` : `${saved} min`;
+        $('metric-latency').textContent = totalTranscriptions ? `${Math.round(totalLatency / totalTranscriptions)} ms` : '—';
+    };
+    const refreshUsage = async () => {
+        const result = await api?.sendCommand?.('get_usage');
+        const summary = result?.summary;
+        if (!summary) return;
+        $('metric-cost').textContent = summary.cost_known ? `$${Number(summary.estimated_cost_usd).toFixed(4)}` : 'Unknown';
+    };
+    const recordMetric = (text, latency) => {
+        if (!text) return;
+        totalWords += text.trim().split(/\s+/).filter(Boolean).length;
+        totalLatency += Number(latency) || 0;
+        totalTranscriptions += 1;
+        localStorage.setItem('audioscribe_total_words', String(totalWords));
+        updateMetrics(); refreshUsage();
+    };
+    updateMetrics();
+
+    recordBtn?.addEventListener('click', async () => {
+        recordBtn.disabled = true;
+        if (!isRecording) {
+            const ready = await runPreflightCheck(true);
+            if (ready) {
+                const result = await api?.sendCommand?.('start_recording');
+                if (result?.status !== 'ok') setSystemStatus('error', result?.error || 'Could not start recording');
+                else updateRecordState(true);
+            }
+        } else {
+            const result = await api?.sendCommand?.('stop_recording');
+            if (result?.status !== 'ok') setSystemStatus('error', result?.error || 'Could not stop recording');
+            else updateRecordState(false);
+        }
+        recordBtn.disabled = false;
+    });
+
+    api?.onEngineEvent?.((event) => {
+        if (!event) return;
+        if (event.event === 'status_changed') {
+            if (event.data.status === 'recording') updateRecordState(true);
+            if (event.data.status === 'processing' || event.data.status === 'ready') updateRecordState(false);
+            setSystemStatus('', event.data.status === 'recording' ? 'Recording' : 'Processing transcription...');
+        } else if (event.event === 'transcription_result') {
+            const text = event.data.text || '';
+            recordMetric(text, event.data.latency_ms);
+            const empty = $('empty-history-state');
+            empty?.remove();
+            const item = document.createElement('div'); item.className = 'transcription-item';
+            const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = `${new Date().toLocaleTimeString()} · ${Math.round(event.data.latency_ms || 0)} ms · ${event.data.model || 'model'}`;
+            const body = document.createElement('div'); body.className = 'body'; body.textContent = text;
+            item.append(meta, body); historyList.prepend(item);
+            updateRecordState(false); setSystemStatus('', 'Engine ready · result delivered');
+        } else if (event.event === 'error' || event.event === 'engine_error') {
+            updateRecordState(false);
+            setSystemStatus('error', event.data?.message || 'Engine error');
+            warningText.textContent = event.data?.message || 'The engine reported an error.';
+            warningCard.classList.remove('hidden');
+        }
+    });
+    $('clear-history-btn')?.addEventListener('click', () => {
+        historyList.textContent = '';
+        const empty = document.createElement('div'); empty.className = 'empty-state'; empty.id = 'empty-history-state';
+        empty.textContent = 'Your recent dictations will appear here.'; historyList.appendChild(empty);
+    });
+
+    loadProviderConfig().then(async () => { await refreshDevices(); await refreshModels(); await runPreflightCheck(); await refreshUsage(); });
 });

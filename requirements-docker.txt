@@ -1,0 +1,8 @@
+# Dependencies required by the headless Python engine.
+litellm>=1.51.0
+openai>=1.0.0
+sounddevice>=0.4.6
+numpy>=1.24.0
+pyyaml>=6.0.1
+soundfile>=0.12.1
+python-dotenv>=1.0.0

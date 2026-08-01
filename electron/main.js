@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, safeStorage } = require('electron');
 const path = require('path');
 const net = require('net');
 const { spawn } = require('child_process');
@@ -9,7 +9,36 @@ let overlayWindow = null;
 let tray = null;
 let pythonProcess = null;
 let socketClient = null;
+let socketBuffer = '';
+const pendingRequests = new Map();
+let reconnectTimer = null;
 let isRecording = false;
+
+function providerConfigPath() {
+    return path.join(app.getPath('userData'), 'provider-config.json.enc');
+}
+
+function loadProviderConfig() {
+    try {
+        const encrypted = require('fs').readFileSync(providerConfigPath(), 'utf8');
+        if (safeStorage.isEncryptionAvailable()) {
+            return JSON.parse(safeStorage.decryptString(Buffer.from(encrypted, 'base64')));
+        }
+        return JSON.parse(encrypted);
+    } catch (error) {
+        return null;
+    }
+}
+
+function saveProviderConfig(config) {
+    const fs = require('fs');
+    fs.mkdirSync(path.dirname(providerConfigPath()), { recursive: true });
+    const serialized = JSON.stringify(config);
+    const value = safeStorage.isEncryptionAvailable()
+        ? safeStorage.encryptString(serialized).toString('base64')
+        : serialized;
+    fs.writeFileSync(providerConfigPath(), value, { encoding: 'utf8', mode: 0o600 });
+}
 
 function createOverlayWindow() {
     const { screen } = require('electron');
@@ -137,20 +166,30 @@ function createTray() {
 }
 
 function connectToPythonServer() {
+    if (socketClient && !socketClient.destroyed) return;
+    socketBuffer = '';
     socketClient = net.connect({ port: 8765, host: '127.0.0.1' }, () => {
+        hasConnectedToEngine = true;
         console.log('[Electron] Connected to AudioScribe Python Server.');
+        sendStoredProviderConfig();
     });
 
-    let buffer = '';
     socketClient.on('data', (data) => {
-        buffer += data.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
+        socketBuffer += data.toString();
+        const lines = socketBuffer.split('\n');
+        socketBuffer = lines.pop();
 
         for (const line of lines) {
             if (!line.trim()) continue;
             try {
                 const eventData = JSON.parse(line.trim());
+                if (eventData.id && pendingRequests.has(eventData.id)) {
+                    const request = pendingRequests.get(eventData.id);
+                    pendingRequests.delete(eventData.id);
+                    clearTimeout(request.timer);
+                    request.resolve(eventData);
+                    continue;
+                }
                 if (mainWindow) {
                     mainWindow.webContents.send('engine-event', eventData);
                 }
@@ -185,9 +224,44 @@ function connectToPythonServer() {
     });
 
     socketClient.on('error', (err) => {
-        console.log('[Electron] Waiting for Python engine to initialize...');
-        setTimeout(connectToPythonServer, 2000);
+        console.log('[Electron] Engine connection error:', err.message);
     });
+
+    socketClient.on('close', () => {
+        for (const [id, request] of pendingRequests) {
+            clearTimeout(request.timer);
+            request.resolve({ status: 'error', code: 'engine_offline', error: 'Python engine offline' });
+            pendingRequests.delete(id);
+        }
+        socketClient = null;
+        if (!reconnectTimer) {
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                connectToPythonServer();
+            }, 2000);
+        }
+    });
+}
+
+function sendEngineRequest(command, params = {}, timeoutMs = 10000) {
+    return new Promise((resolve) => {
+        if (!socketClient || socketClient.destroyed) {
+            resolve({ status: 'error', code: 'engine_offline', error: 'Python engine offline' });
+            return;
+        }
+        const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        const timer = setTimeout(() => {
+            pendingRequests.delete(id);
+            resolve({ status: 'error', code: 'engine_timeout', error: `Engine timeout for ${command}` });
+        }, timeoutMs);
+        pendingRequests.set(id, { resolve, timer });
+        socketClient.write(JSON.stringify({ id, command, params }) + '\n');
+    });
+}
+
+async function sendStoredProviderConfig() {
+    const config = loadProviderConfig();
+    if (config) await sendEngineRequest('configure_provider', config);
 }
 
 function launchPythonSidecar() {
@@ -199,7 +273,8 @@ function launchPythonSidecar() {
         executable = path.join(process.resourcesPath, 'bin', binName);
         args = ['--server', '--port', '8765'];
         if (!require('fs').existsSync(executable)) {
-            console.log('[Electron] Standalone mode: Running Native Node.js Engine (no sidecar binary required).');
+            console.error('[Electron] Packaged engine binary is missing. Desktop app will remain offline.');
+            if (mainWindow) mainWindow.webContents.send('engine-event', { event: 'engine_error', data: { code: 'engine_binary_missing', message: 'Engine Python não foi incluído nesta instalação.' } });
             return;
         }
     } else {
@@ -209,12 +284,13 @@ function launchPythonSidecar() {
     }
 
     try {
-        pythonProcess = spawn(executable, args);
+        pythonProcess = spawn(executable, args, { cwd: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..') });
         pythonProcess.on('error', (err) => {
-            console.log('[Electron] Running in Pure Native Node.js mode.');
+            console.error('[Electron] Python engine failed to start:', err.message);
+            if (mainWindow) mainWindow.webContents.send('engine-event', { event: 'engine_error', data: { code: 'engine_spawn_failed', message: err.message } });
         });
     } catch (e) {
-        console.log('[Electron] Running in Pure Native Node.js mode.');
+        console.error('[Electron] Python engine failed to start:', e.message);
     }
 
     pythonProcess.stdout.on('data', (data) => {
@@ -232,41 +308,58 @@ function launchPythonSidecar() {
     setTimeout(connectToPythonServer, 1500);
 }
 
-function toggleRecording() {
-    isRecording = !isRecording;
-    const command = isRecording ? 'start_recording' : 'stop_recording';
-    
+async function toggleRecording(profile = null) {
+    const command = isRecording ? 'stop_recording' : 'start_recording';
+    const result = await sendEngineRequest(command);
+    if (result?.status !== 'ok') {
+        console.error('[Electron] Recording command failed:', result?.error || result?.code);
+        return result;
+    }
+    isRecording = command === 'start_recording';
     if (overlayWindow) {
         if (isRecording) {
             overlayWindow.showInactive();
-            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1, shortcut: currentShortcut });
+            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1, shortcut: profile?.shortcut || currentShortcut });
         } else {
-            overlayWindow.webContents.send('update-overlay-state', { status: 'processing', shortcut: currentShortcut });
+            overlayWindow.webContents.send('update-overlay-state', { status: 'processing', shortcut: profile?.shortcut || currentShortcut });
         }
     }
-
-    if (socketClient && !socketClient.destroyed) {
-        socketClient.write(JSON.stringify({ command }) + '\n');
-    }
+    return result;
 }
 
 let currentShortcut = 'F9';
 
+function registerAllShortcuts() {
+    globalShortcut.unregisterAll();
+    const registered = [];
+    const candidates = [{ shortcut: currentShortcut, callback: () => toggleRecording() }];
+    activeProfiles.forEach((profile) => {
+        if (profile.enabled && profile.shortcut) candidates.push({ shortcut: profile.shortcut, callback: () => toggleRecording(profile) });
+    });
+    candidates.forEach(({ shortcut, callback }) => {
+        try {
+            if (globalShortcut.register(shortcut, callback)) registered.push(shortcut);
+        } catch (error) {
+            console.error(`[Electron] Failed to register ${shortcut}:`, error.message);
+        }
+    });
+    if (!registered.length && currentShortcut !== 'F9') {
+        currentShortcut = 'F9';
+        globalShortcut.register('F9', () => toggleRecording());
+        registered.push('F9');
+    }
+    return registered;
+}
+
 function registerShortcut(newKey) {
     try {
-        globalShortcut.unregisterAll();
-        const success = globalShortcut.register(newKey, () => {
-            toggleRecording();
-        });
-        if (success) {
-            currentShortcut = newKey;
-            return { status: 'ok', shortcut: newKey };
-        } else {
-            // Fallback to F9
-            globalShortcut.register('F9', () => toggleRecording());
-            currentShortcut = 'F9';
-            return { status: 'error', error: `Could not register key '${newKey}'. Reverted to F9.` };
-        }
+        const previous = currentShortcut;
+        currentShortcut = newKey;
+        const registered = registerAllShortcuts();
+        if (registered.includes(newKey)) return { status: 'ok', shortcut: newKey };
+        currentShortcut = previous;
+        registerAllShortcuts();
+        return { status: 'error', error: `Could not register key '${newKey}'. Reverted to ${previous}.` };
     } catch (err) {
         return { status: 'error', error: err.message };
     }
@@ -289,31 +382,8 @@ let activeProfiles = [];
 
 function registerProfileShortcuts(profiles) {
     activeProfiles = profiles || [];
-    globalShortcut.unregisterAll();
-    let successCount = 0;
-    const registered = [];
-
-    activeProfiles.forEach(profile => {
-        if (!profile.shortcut || !profile.enabled) return;
-        try {
-            const ok = globalShortcut.register(profile.shortcut, () => {
-                toggleRecording(profile);
-            });
-            if (ok) {
-                successCount++;
-                registered.push(profile.shortcut);
-            }
-        } catch (e) {
-            console.error(`Failed to register shortcut ${profile.shortcut} for profile ${profile.name}:`, e);
-        }
-    });
-
-    // Fallback default F9 if nothing registered
-    if (registered.length === 0) {
-        globalShortcut.register('F9', () => toggleRecording());
-    }
-
-    return { status: 'ok', count: successCount, registered };
+    const registered = registerAllShortcuts();
+    return { status: 'ok', count: registered.length, registered };
 }
 
 ipcMain.handle('update-profiles', async (event, profiles) => {
@@ -324,30 +394,28 @@ ipcMain.handle('register-shortcut', async (event, key) => {
     return registerShortcut(key);
 });
 
+ipcMain.handle('get-provider-config', async () => {
+    const config = loadProviderConfig();
+    if (!config) return { status: 'ok', config: null };
+    return {
+        status: 'ok',
+        config: { ...config, api_key: config.api_key ? 'configured' : '' },
+    };
+});
+
+ipcMain.handle('save-provider-config', async (event, config) => {
+    const current = loadProviderConfig() || {};
+    const next = { ...current, ...config };
+    if (config.api_key === 'configured' || !Object.prototype.hasOwnProperty.call(config, 'api_key')) {
+        next.api_key = current.api_key || null;
+    }
+    saveProviderConfig(next);
+    const result = await sendEngineRequest('configure_provider', next);
+    return { ...result, config: { ...next, api_key: next.api_key ? 'configured' : '' } };
+});
+
 ipcMain.handle('engine-command', async (event, { command, params }) => {
-    return new Promise((resolve) => {
-        if (!socketClient || socketClient.destroyed) {
-            return resolve({ status: 'error', error: 'Python engine offline' });
-        }
-
-        const id = Math.random().toString(36).substring(7);
-        const onData = (data) => {
-            const lines = data.toString().split('\n');
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                    const parsed = JSON.parse(line);
-                    if (parsed.id === id) {
-                        socketClient.removeListener('data', onData);
-                        resolve(parsed);
-                    }
-                } catch (e) {}
-            }
-        };
-
-        socketClient.on('data', onData);
-        socketClient.write(JSON.stringify({ id, command, params }) + '\n');
-    });
+    return sendEngineRequest(command, params);
 });
 
 app.on('will-quit', () => {

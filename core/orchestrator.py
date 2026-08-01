@@ -81,7 +81,9 @@ class TranscriptionOrchestrator:
             self.keyboard_listener.start(on_press=self._on_hotkey_press)
         
         if self.ui:
-            self.ui.update_live_status("ready", f"Press {self.keyboard_listener.hotkey.upper()} to record | Ctrl+C to exit")
+            hotkey = getattr(self.keyboard_listener, "hotkey", None)
+            message = f"Press {hotkey.upper()} to record | Ctrl+C to exit" if hotkey else "Ready | Ctrl+C to exit"
+            self.ui.update_live_status("ready", message)
         self._emit_event("engine_status", {"status": "ready", "engine_running": True})
 
     def add_event_listener(self, listener: Callable[[str, dict], None]) -> None:
@@ -221,6 +223,8 @@ class TranscriptionOrchestrator:
         price_source = "provider_response" if cost is not None else "unknown"
         if operation == "transcription" and cost is None:
             cost, price_source = self.price_catalog.estimate_transcription(model, audio_seconds)
+        if operation == "llm" and cost is None:
+            cost, price_source = self.price_catalog.estimate_llm(model, usage.get("input_tokens"), usage.get("output_tokens"))
         self.usage_store.record(UsageRecord(
             request_id=request_id,
             operation=operation,
@@ -233,7 +237,7 @@ class TranscriptionOrchestrator:
             output_tokens=usage.get("output_tokens"),
             estimated_cost_usd=cost,
             price_source=price_source,
-            fallback_used=getattr(component, "_fallback_count", 0) > 0,
+            fallback_used=bool(getattr(component, "last_fallback_used", False)),
             error_code=error_code,
         ))
     

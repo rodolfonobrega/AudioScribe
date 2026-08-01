@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import io
 import os
 import sqlite3
 import threading
@@ -32,7 +32,7 @@ class UsageRecord:
 def audio_duration_seconds(audio_data: bytes) -> Optional[float]:
     """Return WAV duration without failing the transcription pipeline."""
     try:
-        with wave.open(__import__("io").BytesIO(audio_data), "rb") as wav:
+        with wave.open(io.BytesIO(audio_data), "rb") as wav:
             return wav.getnframes() / float(wav.getframerate())
     except Exception:
         return None
@@ -71,11 +71,25 @@ class PriceCatalog:
         "groq/whisper-large-v3-turbo": 0.04,
         "groq/whisper-large-v3": 0.111,
     }
+    LLM_PER_MILLION_TOKENS_USD = {
+        "groq/openai/gpt-oss-120b": (0.15, 0.60),
+        "openai/gpt-oss-120b": (0.15, 0.60),
+        "groq/openai/gpt-oss-20b": (0.075, 0.30),
+        "openai/gpt-oss-20b": (0.075, 0.30),
+    }
 
     def estimate_transcription(self, model: str, seconds: Optional[float]) -> tuple[Optional[float], str]:
         if seconds is None or model not in self.TRANSCRIPTION_PER_HOUR_USD:
             return None, "unknown"
         return seconds / 3600.0 * self.TRANSCRIPTION_PER_HOUR_USD[model], "catalog:groq-docs"
+
+    def estimate_llm(self, model: str, input_tokens: Optional[int], output_tokens: Optional[int]) -> tuple[Optional[float], str]:
+        prices = self.LLM_PER_MILLION_TOKENS_USD.get(model)
+        if not prices or input_tokens is None or output_tokens is None:
+            return None, "unknown"
+        input_price, output_price = prices
+        cost = (input_tokens / 1_000_000 * input_price) + (output_tokens / 1_000_000 * output_price)
+        return cost, "catalog:groq-docs"
 
 
 class UsageStore:
@@ -149,4 +163,3 @@ class UsageStore:
         result["cost_known"] = result["estimated_cost_usd"] is not None
         result["by_model"] = [dict(item) for item in by_model]
         return result
-

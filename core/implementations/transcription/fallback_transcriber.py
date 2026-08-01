@@ -51,6 +51,8 @@ class FallbackTranscriber(AbstractTranscriber):
             for transcriber in transcribers
         }
         self._fallback_count = 0
+        self.last_usage = {"input_tokens": None, "output_tokens": None, "cost": None}
+        self.last_fallback_used = False
 
     @property
     def active_transcriber(self) -> str:
@@ -91,6 +93,8 @@ class FallbackTranscriber(AbstractTranscriber):
                     result = transcriber.transcribe(audio_data)
 
                     if result is not None:
+                        self.last_usage = getattr(transcriber, "last_usage", self.last_usage)
+                        self.last_fallback_used = idx > 0
                         # Success - update stats and return
                         self._transcriber_usage[transcriber_name] += 1
                         if idx > 0:
@@ -145,6 +149,8 @@ class FallbackTranscriber(AbstractTranscriber):
                     result = transcriber.transcribe_file(file_path)
 
                     if result is not None:
+                        self.last_usage = getattr(transcriber, "last_usage", self.last_usage)
+                        self.last_fallback_used = idx > 0
                         # Success - update stats and return
                         self._transcriber_usage[transcriber_name] += 1
                         if idx > 0:

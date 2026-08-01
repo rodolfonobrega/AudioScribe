@@ -1,65 +1,23 @@
-version: '3.8'
-
 services:
   audioscribe:
     build:
       context: .
       dockerfile: Dockerfile
-      target: audioscribe
-    container_name: audioscribe
+    container_name: audioscribe-engine
     restart: unless-stopped
-
-    # Audio device access (Linux)
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: /app
+      AUDIOSCRIBE_DATA_DIR: /home/audioscribe/.audioscribe
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      TRANSCRIPTION_BASE_URL: "${TRANSCRIPTION_BASE_URL:-}"
+    ports:
+      - "127.0.0.1:8765:8765"
     devices:
-      - /dev/snd:/dev/snd
-
-    # PulseAudio socket and configuration files
+      - "/dev/snd:/dev/snd"
     volumes:
-      - ${XDG_RUNTIME_DIR}/pulse/native:${XDG_RUNTIME_DIR}/pulse/native
-      - ~/.config/pulse/cookie:/root/.config/pulse/cookie
-      - ./config.yaml:/app/config.yaml:ro
-      - ./.env:/app/.env:ro
+      - audioscribe-data:/home/audioscribe/.audioscribe
 
-    # Environment configuration
-    environment:
-      - PYTHONPATH=/app/src
-      - PYTHONUNBUFFERED=1
-      - PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native
-
-    # Network access (optional, for some providers)
-    # networks:
-    #   - transcriber-net
-
-    # Health check
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import sys; sys.exit(0)" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-    # Console access (optional)
-    # stdin_open: true
-    # tty: true
-
-    # Optional development service with hot-reload
-  dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: audioscribe
-    container_name: audioscribe-dev
-    volumes:
-      - ./src:/app/src
-      - ./config.yaml:/app/config.yaml
-      - ./.env:/app/.env
-    environment:
-      - PYTHONPATH=/app/src
-      - PYTHONUNBUFFERED=1
-    profiles:
-      - dev
-    command: [ "start", "--debug" ]
-
-# Optional network configuration
-# networks:
-#   transcriber-net:
-#     driver: bridge
+volumes:
+  audioscribe-data:

@@ -69,9 +69,10 @@ class ClipboardOutputHandler(AbstractOutputHandler):
                     win32clipboard.SetClipboardText(text)
                     win32clipboard.CloseClipboard()
                 except ImportError:
-                    # PowerShell fallback
-                    cmd = f'Set-Clipboard -Value "{text}"'
-                    subprocess.run(["powershell", "-Command", cmd], check=True)
+                    # Read from stdin instead of interpolating transcription
+                    # text into a shell command.
+                    cmd = 'Set-Clipboard -Value ([Console]::In.ReadToEnd())'
+                    subprocess.run(["powershell", "-NoProfile", "-Command", cmd], input=text, text=True, check=True)
             elif self._platform == "Darwin":
                 subprocess.run(["pbcopy"], input=text.encode('utf-8'), check=True)
             else:  # Linux
@@ -87,8 +88,17 @@ class ClipboardOutputHandler(AbstractOutputHandler):
             print(f"Clipboard output error: {e}")
     
     def is_available(self) -> bool:
-        """Clipboard is available on all major platforms."""
-        return True
+        """Check the actual clipboard backend instead of assuming availability."""
+        if self.pyperclip is not None:
+            try:
+                return bool(self.pyperclip.is_available())
+            except Exception:
+                return True
+        if self._platform == "Windows":
+            return shutil.which("powershell") is not None
+        if self._platform == "Darwin":
+            return shutil.which("pbcopy") is not None
+        return shutil.which("xclip") is not None or shutil.which("xsel") is not None
     
     @property
     def platform(self) -> str:

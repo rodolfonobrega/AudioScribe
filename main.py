@@ -74,6 +74,9 @@ def main():
     # listener receiving the same F9 press.
     if args.server:
         overrides.setdefault('keyboard', {})['enabled'] = False
+        # Electron owns paste/output behavior. Keep the Python sidecar alive
+        # even when the desktop UI still needs to configure the provider.
+        overrides.setdefault('output', {})['handlers'] = ['stdout']
 
     if args.verbose:
         overrides.setdefault('output', {})['verbose'] = True
@@ -97,7 +100,7 @@ def main():
     if args.preflight_only:
         sys.exit(0 if is_ready else 1)
 
-    if not is_ready:
+    if not is_ready and not args.server:
         print("❌ PRE-FLIGHT FAILED: Resolva os erros acima antes de continuar.")
         sys.exit(1)
 
@@ -114,25 +117,26 @@ def main():
     if config.orchestrator.verbose:
         ui.show_compact_config(config, args, orchestrator.audio_input)
     
-    # FAIL-FAST: Validate components
+    # FAIL-FAST: Validate components in CLI mode. IPC mode exposes this
+    # diagnostic through the server so the UI can configure first.
     print("Validating components...")
     try:
-        if orchestrator.audio_input:
+        if not args.server and orchestrator.audio_input:
             print(" - Checking Audio Input...", end=" ", flush=True)
             orchestrator.audio_input.health_check()
             print("OK")
             
-        if orchestrator.transcriber:
+        if not args.server and orchestrator.transcriber:
             print(" - Checking Transcription Service...", end=" ", flush=True)
             orchestrator.transcriber.health_check()
             print("OK")
             
-        if orchestrator.llm_processor:
+        if not args.server and orchestrator.llm_processor:
             print(f" - Checking LLM Processor ({orchestrator.llm_processor.model})...", end=" ", flush=True)
             orchestrator.llm_processor.health_check()
             print("OK")
         
-        if orchestrator.output_handler:
+        if not args.server and orchestrator.output_handler:
             print(f" - Checking Output Handler...", end=" ", flush=True)
             if not orchestrator.output_handler.is_available():
                 handler_name = orchestrator.output_handler.__class__.__name__

@@ -22,7 +22,7 @@ def discover_models(base_url: Optional[str], api_key: Optional[str], provider: s
         return []
     normalized = base_url.rstrip("/")
     if provider.lower() == "ollama" or "11434" in normalized:
-        url = normalized[:-3] + "api/tags" if normalized.endswith("/v1") else normalized + "/api/tags"
+        url = normalized[:-2] + "api/tags" if normalized.endswith("/v1") else normalized + "/api/tags"
         payload = _get_json(url, api_key)
         return [
             {
