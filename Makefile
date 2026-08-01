@@ -1,6 +1,6 @@
 # Makefile for AudioScribe
 
-.PHONY: help install install-dev test test-coverage lint format clean run build upload
+.PHONY: help install install-dev requirements test test-coverage test-unit test-integration lint format format-check mypy clean run run-timeout run-file docker-build docker-up docker-down build upload check all init example-config env-file docs version update-deps freeze
 
 # Default target
 .DEFAULT_GOAL := help
@@ -97,10 +97,6 @@ run-file: ## Transcribe a file (usage: make run-file FILE=path/to/file.wav)
 	@echo '$(BLUE)Transcribing file: $(FILE)$(NC)'
 	python main.py --file "$(FILE)"
 
-run-example: ## Run example usage script
-	@echo '$(BLUE)Running example usage...$(NC)'
-	python example_usage.py
-
 docker-build: ## Build Docker image
 	@echo '$(BLUE)Building Docker image...$(NC)'
 	docker-compose build
@@ -113,10 +109,6 @@ docker-up: ## Start Docker container
 docker-down: ## Stop Docker container
 	@echo '$(BLUE)Stopping Docker container...$(NC)'
 	docker-compose down
-
-docker-dev: ## Start development container
-	@echo '$(BLUE)Starting development container...$(NC)'
-	docker-compose -f docker-compose.yml --profile dev up
 
 build: ## Build distribution packages
 	@echo '$(BLUE)Building distribution packages...$(NC)'
@@ -140,7 +132,7 @@ init: ## Initialize development environment
 
 example-config: ## Create example config file
 	@echo '$(BLUE)Creating example config.yaml...$(NC)'
-	cp config/defaults.yaml config.yaml.example
+	cp config/defaults.yaml config/defaults.example.yaml
 	@echo '$(GREEN)✓ Example config created$(NC)'
 
 env-file: ## Create .env file from example

@@ -6,6 +6,15 @@ The Electron app uses the Python engine as the single source of truth. It does n
 
 API usage is persisted locally in SQLite under `~/.audioscribe/usage.sqlite3` (or `AUDIOSCRIBE_DATA_DIR`). The UI reports estimated total, daily and monthly cost. If a provider does not return usage metadata and no catalogued price exists, the value is shown as `Unknown`, never silently as zero.
 
+## Documentation
+
+- [Quickstart](docs/QUICKSTART.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Usage](docs/USAGE.md)
+- [Release guide](docs/RELEASE.md)
+- [Provider development](docs/IMPLEMENTING_NEW_PROVIDERS.md)
+- [Audit and remediation plan](docs/audits/PLANO_DE_CORRECAO_E_AUDITORIA.md)
+
 Validation commands:
 
 ```bash

@@ -383,11 +383,11 @@ pip install --upgrade pip
 
 ## 📚 Next Steps
 
-1. **Read the full documentation** - [README.md](README.md)
+1. **Read the full documentation** - [README.md](../README.md)
 2. **Check examples** - [example_usage.py](example_usage.py)
 3. **Explore configuration** - [config/defaults.yaml](config/defaults.yaml)
 4. **Run tests** - `make test`
-5. **Contribute** - Check [CONTRIBUTING.md](CONTRIBUTING.md)
+5. **Contribute** - Check [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ---
 
