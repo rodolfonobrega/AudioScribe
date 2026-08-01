@@ -51,12 +51,12 @@ jobs:
 
       - name: Build Python Engine with PyInstaller
         run: |
-          pyinstaller --onefile --name audioscribe_engine main.py
+          pyinstaller --onefile --name audioscribe_engine --hidden-import=sounddevice --hidden-import=pynput --hidden-import=litellm --hidden-import=yaml --hidden-import=pyperclip --hidden-import=pyautogui main.py
 
       - name: Install Electron Dependencies
         run: |
           cd electron
-          npm ci || npm install
+          npm install
 
       - name: Copy Python Engine Binary to Electron Resources
         shell: bash
