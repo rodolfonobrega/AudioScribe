@@ -20,10 +20,11 @@ function createOverlayWindow() {
         width: 380,
         height: 80,
         x: Math.round((width - 380) / 2),
-        y: Math.round(height - 100),
+        y: Math.round((height - 80) / 2),
         frame: false,
         transparent: true,
         alwaysOnTop: true,
+        focusable: false,
         skipTaskbar: true,
         resizable: false,
         show: false,
@@ -146,10 +147,16 @@ function connectToPythonServer() {
                             overlayWindow.webContents.send('update-overlay-state', { status: 'processing' });
                         }
                     } else if (eventData.event === 'transcription_result') {
-                        overlayWindow.webContents.send('update-overlay-state', { status: 'done', text: eventData.data.text });
+                        const text = eventData.data.text;
+                        overlayWindow.webContents.send('update-overlay-state', { status: 'done', text: text });
+                        
+                        // Auto-paste text into the user's currently focused window
+                        const NativeOutputHandler = require('./src/output');
+                        NativeOutputHandler.copyAndPaste(text);
+
                         setTimeout(() => {
                             overlayWindow.hide();
-                        }, 1800);
+                        }, 1500);
                     }
                 }
             } catch (err) {
@@ -213,9 +220,9 @@ function toggleRecording() {
     if (overlayWindow) {
         if (isRecording) {
             overlayWindow.showInactive();
-            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1 });
+            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1, shortcut: currentShortcut });
         } else {
-            overlayWindow.webContents.send('update-overlay-state', { status: 'processing' });
+            overlayWindow.webContents.send('update-overlay-state', { status: 'processing', shortcut: currentShortcut });
         }
     }
 

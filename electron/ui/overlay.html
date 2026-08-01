@@ -22,7 +22,7 @@
                 <span class="bar bar5"></span>
             </div>
 
-            <span class="hotkey-hint">F9 to Stop</span>
+            <span class="hotkey-hint" id="hotkey-hint">F9</span>
         </div>
     </div>
 
@@ -32,9 +32,71 @@
         const statusEl = document.getElementById('overlay-status');
         const dotEl = document.getElementById('overlay-dot');
         const eqBars = document.querySelectorAll('.bar');
+        const hotkeyHint = document.getElementById('hotkey-hint');
 
-        ipcRenderer.on('update-overlay-state', (event, { status, rms, text }) => {
+        // --- WEB AUDIO CHIMES SYNTHESIZER ---
+        let audioCtx = null;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioCtx;
+        }
+
+        function playStartChime() {
+            try {
+                const ctx = getAudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5 tone
+                osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.1); // E5 tone
+
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15);
+            } catch (e) {
+                console.error('Audio chime error:', e);
+            }
+        }
+
+        function playStopChime() {
+            try {
+                const ctx = getAudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(659.25, ctx.currentTime); // E5 tone
+                osc.frequency.exponentialRampToValueAtTime(440.00, ctx.currentTime + 0.12); // A4 tone
+
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.18);
+            } catch (e) {
+                console.error('Audio chime error:', e);
+            }
+        }
+
+        ipcRenderer.on('update-overlay-state', (event, { status, rms, text, shortcut }) => {
+            if (shortcut) {
+                hotkeyHint.textContent = shortcut;
+            }
+
             if (status === 'recording') {
+                playStartChime();
                 statusEl.textContent = 'Recording...';
                 dotEl.className = 'red-dot pulse';
                 
@@ -45,11 +107,12 @@
                     bar.style.transform = `scaleY(${Math.max(0.2, scale * heightFactor * (0.8 + Math.random() * 0.4))})`;
                 });
             } else if (status === 'processing') {
+                playStopChime();
                 statusEl.textContent = 'Transcribing...';
                 dotEl.className = 'red-dot yellow';
                 eqBars.forEach(bar => bar.style.transform = 'scaleY(0.3)');
             } else if (status === 'done') {
-                statusEl.textContent = text ? `Done! (${text.substring(0, 20)}...)` : 'Done!';
+                statusEl.textContent = text ? `Pasted!` : 'Done!';
                 dotEl.className = 'red-dot green';
             }
         });
