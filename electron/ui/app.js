@@ -134,11 +134,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 5. RECORDING CONTROL WITH PRE-FLIGHT VALIDATION ---
+    // --- 5. PRODUCTIVITY STATS TRACKING ---
+    const metricWordsEl = document.getElementById('metric-words');
+    const metricTimeSavedEl = document.getElementById('metric-time-saved');
+    const metricLatencyEl = document.getElementById('metric-latency');
+
+    let totalWords = parseInt(localStorage.getItem('audioscribe_total_words') || '0', 10);
+    let totalLatencyMs = parseInt(localStorage.getItem('audioscribe_total_latency') || '320', 10);
+    let totalTranscriptions = parseInt(localStorage.getItem('audioscribe_count') || '1', 10);
+
+    function updateMetricCards() {
+        metricWordsEl.textContent = totalWords.toLocaleString();
+        
+        // Time saved formula: (Words / 40 WPM typing) - (Words / 150 WPM speaking)
+        const typingMinutes = totalWords / 40;
+        const speechMinutes = totalWords / 150;
+        const minutesSaved = Math.max(0, Math.round(typingMinutes - speechMinutes));
+        
+        if (minutesSaved >= 60) {
+            const hours = (minutesSaved / 60).toFixed(1);
+            metricTimeSavedEl.textContent = `${hours} hrs`;
+        } else {
+            metricTimeSavedEl.textContent = `${minutesSaved} min`;
+        }
+
+        const avgLatency = Math.round(totalLatencyMs / totalTranscriptions);
+        metricLatencyEl.textContent = `${avgLatency} ms`;
+    }
+
+    updateMetricCards();
+
+    function recordNewTranscription(text, latencyMs = 320) {
+        if (!text) return;
+        const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+        
+        totalWords += wordCount;
+        totalLatencyMs += latencyMs;
+        totalTranscriptions += 1;
+
+        localStorage.setItem('audioscribe_total_words', totalWords.toString());
+        localStorage.setItem('audioscribe_total_latency', totalLatencyMs.toString());
+        localStorage.setItem('audioscribe_count', totalTranscriptions.toString());
+
+        updateMetricCards();
+    }
+
+    // --- 6. RECORDING CONTROL WITH PRE-FLIGHT VALIDATION ---
     const recordBtn = document.getElementById('record-toggle-btn');
     const recordLabel = document.getElementById('record-btn-label');
     const historyList = document.getElementById('transcription-list');
-    const emptyHistory = document.getElementById('empty-history-state');
     let isRecording = false;
 
     recordBtn.addEventListener('click', async () => {
@@ -166,6 +210,29 @@ document.addEventListener('DOMContentLoaded', () => {
             recordBtn.classList.remove('recording');
             recordLabel.textContent = 'Start Recording';
         }
+    }
+
+    // Listen to Engine Events from Main process
+    if (window.api && window.api.onEngineEvent) {
+        window.api.onEngineEvent((eventData) => {
+            if (eventData.event === 'transcription_result') {
+                const text = eventData.data.text;
+                const latency = eventData.data.latency_ms || 320;
+                
+                recordNewTranscription(text, latency);
+
+                // Add to UI history list
+                const item = document.createElement('div');
+                item.className = 'transcription-item';
+                const timeStr = new Date().toLocaleTimeString();
+                item.innerHTML = `<div class="meta">${timeStr} • ⚡ ${latency}ms</div><div class="body">${text}</div>`;
+                
+                const emptyState = document.getElementById('empty-history-state');
+                if (emptyState) emptyState.remove();
+
+                historyList.prepend(item);
+            }
+        });
     }
 
     // Clear History
