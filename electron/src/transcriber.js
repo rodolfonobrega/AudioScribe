@@ -14,6 +14,20 @@ class NativeTranscriber {
         this.llmModel = config.llmModel || 'meta-llama/llama-4-maverick-17b-128e-instruct';
     }
 
+    validatePreflight(apiKeyOverride = null) {
+        const keyToTest = apiKeyOverride || this.apiKey || process.env.GROQ_API_KEY;
+        const errors = [];
+
+        if (!keyToTest && !this.baseUrl.includes('localhost')) {
+            errors.push("Missing Groq API Key. Please enter your API key (starts with gsk_...) in Settings.");
+        }
+
+        return {
+            valid: errors.length === 0,
+            errors: errors
+        };
+    }
+
     async transcribe(audioBuffer) {
         if (!this.apiKey && !this.baseUrl.includes('localhost')) {
             throw new Error("GROQ_API_KEY is missing. Please enter your API key in Settings.");

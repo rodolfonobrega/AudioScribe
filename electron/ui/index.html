@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,118 +8,135 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <aside class="sidebar">
-            <div class="logo">
-                <span class="icon">🎙️</span>
-                <h2>AudioScribe</h2>
+    <div class="app-window">
+        <!-- Top Navigation Header -->
+        <header class="app-header">
+            <div class="brand">
+                <span class="brand-icon">🎙️</span>
+                <span class="brand-name">AudioScribe</span>
+                <span class="version-badge">v1.0.0</span>
             </div>
-            <nav class="nav-links">
-                <button class="nav-btn active" data-tab="dashboard">
-                    <span>⚡ Dashboard</span>
+
+            <div class="header-actions">
+                <!-- Theme Toggle Button -->
+                <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Light/Dark Theme">
+                    <span id="theme-icon">🌙</span>
+                    <span id="theme-label">Dark</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- System Health Pre-flight Status Banner -->
+        <div class="system-status-bar" id="system-status-bar">
+            <span class="status-indicator" id="status-indicator"></span>
+            <span class="status-msg" id="status-msg">Checking system pre-flight status...</span>
+        </div>
+
+        <!-- Main Workspace Grid -->
+        <main class="main-content">
+            <!-- Sidebar Navigation Tabs -->
+            <nav class="tab-sidebar">
+                <button class="nav-btn active" data-tab="dictate">
+                    <span class="nav-icon">🎙️</span> Dictate
                 </button>
                 <button class="nav-btn" data-tab="settings">
-                    <span>⚙️ Settings</span>
+                    <span class="nav-icon">⚙️</span> Settings
                 </button>
                 <button class="nav-btn" data-tab="diagnostics">
-                    <span>🔍 Diagnostics</span>
+                    <span class="nav-icon">🔍</span> Pre-flight
                 </button>
             </nav>
-            <div class="status-badge" id="global-status">
-                <span class="status-dot green"></span>
-                <span class="status-text">Engine Ready</span>
-            </div>
-        </aside>
 
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Dashboard Tab -->
-            <section id="tab-dashboard" class="tab-content active">
-                <header class="tab-header">
-                    <h1>Real-time Transcription</h1>
-                    <p class="subtitle">Press <kbd>F9</kbd> anywhere or click the button below to start dictating.</p>
-                </header>
-
-                <div class="recording-card">
-                    <button class="record-btn" id="record-toggle-btn">
-                        <span class="mic-icon">🎙️</span>
-                        <span id="record-btn-label">Start Recording (F9)</span>
-                    </button>
-                    <div class="mode-pills">
-                        <span class="pill active" id="current-mode-pill">Mode: Push-To-Talk</span>
-                        <span class="pill" id="current-provider-pill">Provider: Groq</span>
+            <!-- Content Area -->
+            <section class="tab-body">
+                
+                <!-- TAB 1: DICTATE -->
+                <div class="tab-content active" id="tab-dictate">
+                    <!-- Main Recording Control Card -->
+                    <div class="card record-card">
+                        <button class="record-btn" id="record-toggle-btn">
+                            <span class="pulse-ring"></span>
+                            <span class="mic-icon">🎙️</span>
+                            <span class="btn-text" id="record-btn-label">Start Recording</span>
+                        </button>
+                        
+                        <div class="hotkey-display">
+                            <span>Shortcut:</span>
+                            <kbd id="active-hotkey-badge">F9</kbd>
+                        </div>
                     </div>
-                </div>
 
-                <div class="transcription-history">
-                    <h3>Recent Transcriptions</h3>
-                    <div id="transcription-list" class="history-list">
-                        <div class="empty-state">
-                            <span>📝</span>
-                            <p>Your transcribed text will appear here in real time.</p>
+                    <!-- Pre-flight Warning Card (Hidden by default) -->
+                    <div class="warning-card hidden" id="preflight-warning-card">
+                        <div class="warning-header">
+                            <span>⚠️ Pre-flight Check Failed</span>
+                        </div>
+                        <p id="preflight-warning-text">Missing Groq API Key. Please enter your API Key in Settings.</p>
+                        <button class="btn-primary-sm" id="fix-config-btn">Go to Settings</button>
+                    </div>
+
+                    <!-- History / Transcriptions Card -->
+                    <div class="card history-card">
+                        <div class="card-header">
+                            <h3>Live Transcriptions</h3>
+                            <button class="btn-text-only" id="clear-history-btn">Clear History</button>
+                        </div>
+                        <div class="transcription-list" id="transcription-list">
+                            <div class="empty-state" id="empty-history-state">
+                                <p>Press <strong>F9</strong> anywhere on your computer to start dictating.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </section>
 
-            <!-- Settings Tab -->
-            <section id="tab-settings" class="tab-content">
-                <header class="tab-header">
-                    <h1>Application Settings</h1>
-                    <p class="subtitle">Configure AI providers, keys, and audio hardware.</p>
-                </header>
+                <!-- TAB 2: SETTINGS -->
+                <div class="tab-content" id="tab-settings">
+                    <div class="card settings-card">
+                        <h3>Configuration</h3>
 
-                <form id="settings-form" class="settings-form">
-                    <div class="form-group">
-                        <label for="groq-api-key">Groq API Key (Free & Instant)</label>
-                        <input type="password" id="groq-api-key" placeholder="gsk_..." autocomplete="off">
-                        <small>Get a free API key at <a href="#" id="link-groq-keys">console.groq.com/keys</a></small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="audio-device-select">Microphone Device</label>
-                        <select id="audio-device-select">
-                            <option value="">Auto / Default Microphone</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="interaction-mode-select">Interaction Mode</label>
-                        <select id="interaction-mode-select">
-                            <option value="push_to_talk">Push-To-Talk (Hold F9)</option>
-                            <option value="toggle">Toggle Mode (Press F9 to start/stop)</option>
-                            <option value="vad">Hands-Free VAD Mode (Auto-Detect Voice)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group update-check-group">
-                        <label>Application Version & Updates</label>
-                        <div class="update-card">
-                            <span id="app-version-label">Current Version: v1.0.0</span>
-                            <button type="button" class="check-updates-btn" id="check-updates-btn">Check for Updates</button>
+                        <!-- API Key Field -->
+                        <div class="form-group">
+                            <label for="api-key-input">Groq API Key (Free)</label>
+                            <input type="password" id="api-key-input" placeholder="gsk_..." autocomplete="off">
+                            <span class="input-hint">Get a free instant key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></span>
                         </div>
-                        <div id="update-status-msg" class="update-status-msg"></div>
+
+                        <!-- Interactive Hotkey Recorder -->
+                        <div class="form-group">
+                            <label for="hotkey-recorder">Global Shortcut Key</label>
+                            <div class="hotkey-recorder-box">
+                                <input type="text" id="hotkey-recorder-input" value="F9" readonly placeholder="Click to record hotkey...">
+                                <button class="btn-secondary" id="record-hotkey-btn">Record Hotkey</button>
+                            </div>
+                            <span class="input-hint">Click the button above and press your preferred hotkey (e.g. F9, Ctrl+Shift+Space, Alt+R).</span>
+                        </div>
+
+                        <!-- Microphone Device Selector -->
+                        <div class="form-group">
+                            <label for="audio-device-select">Microphone Input</label>
+                            <select id="audio-device-select">
+                                <option value="">Auto / Default Microphone</option>
+                            </select>
+                        </div>
+
+                        <button class="btn-primary" id="save-settings-btn">Save Settings</button>
                     </div>
-
-                    <button type="submit" class="save-btn">Save Settings</button>
-                </form>
-            </section>
-
-            <!-- Diagnostics Tab -->
-            <section id="tab-diagnostics" class="tab-content">
-                <header class="tab-header">
-                    <h1>System Pre-flight Diagnostics</h1>
-                    <p class="subtitle">Automatic health check for permissions, audio hardware, and keys.</p>
-                </header>
-
-                <div class="diag-actions">
-                    <button class="run-diag-btn" id="run-preflight-btn">Run Diagnostics Now</button>
                 </div>
 
-                <div id="diag-results" class="diag-results-box">
-                    <p>Click the button above to test your system environment.</p>
+                <!-- TAB 3: DIAGNOSTICS -->
+                <div class="tab-content" id="tab-diagnostics">
+                    <div class="card diagnostics-card">
+                        <h3>System Pre-flight Diagnostics</h3>
+                        <p class="section-desc">Verifies microphone hardware, API connectivity, and OS permissions.</p>
+
+                        <button class="btn-primary" id="run-preflight-btn">Run Pre-flight Diagnostic Check</button>
+
+                        <div class="diag-output-box" id="diag-results">
+                            <p class="placeholder-text">Click "Run Pre-flight Diagnostic Check" to start testing.</p>
+                        </div>
+                    </div>
                 </div>
+
             </section>
         </main>
     </div>

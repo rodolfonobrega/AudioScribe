@@ -1,5 +1,32 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Navigation Tabs
+    // --- 1. THEME SWITCHER (DARK / LIGHT) ---
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    const themeIcon = document.getElementById('theme-icon');
+    const themeLabel = document.getElementById('theme-label');
+    const rootEl = document.documentElement;
+
+    const savedTheme = localStorage.getItem('audioscribe_theme') || 'dark';
+    setTheme(savedTheme);
+
+    themeBtn.addEventListener('click', () => {
+        const currentTheme = rootEl.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        setTheme(newTheme);
+    });
+
+    function setTheme(theme) {
+        rootEl.setAttribute('data-theme', theme);
+        localStorage.setItem('audioscribe_theme', theme);
+        if (theme === 'light') {
+            themeIcon.textContent = '☀️';
+            themeLabel.textContent = 'Light';
+        } else {
+            themeIcon.textContent = '🌙';
+            themeLabel.textContent = 'Dark';
+        }
+    }
+
+    // --- 2. NAVIGATION TABS ---
     const navButtons = document.querySelectorAll('.nav-btn');
     const tabContents = document.querySelectorAll('.tab-content');
 
@@ -14,25 +41,119 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // --- 3. SYSTEM HEALTH PRE-FLIGHT CHECK ---
+    const statusBar = document.getElementById('system-status-bar');
+    const statusMsg = document.getElementById('status-msg');
+    const warningCard = document.getElementById('preflight-warning-card');
+    const warningText = document.getElementById('preflight-warning-text');
+    const fixConfigBtn = document.getElementById('fix-config-btn');
+    const apiKeyInput = document.getElementById('api-key-input');
+
+    // Load saved API Key
+    const savedApiKey = localStorage.getItem('audioscribe_api_key') || '';
+    apiKeyInput.value = savedApiKey;
+
+    function runPreflightCheck() {
+        const apiKey = apiKeyInput.value.trim();
+        if (!apiKey) {
+            statusBar.className = 'system-status-bar error';
+            statusMsg.textContent = '🔴 Action Needed: Groq API Key Missing';
+            warningText.textContent = 'Missing Groq API Key. Please enter your API Key in Settings to start dictating.';
+            warningCard.classList.remove('hidden');
+            return false;
+        } else {
+            statusBar.className = 'system-status-bar';
+            statusMsg.textContent = '🟢 All Systems Operational • Press F9 to Dictate';
+            warningCard.classList.add('hidden');
+            return true;
+        }
+    }
+
+    runPreflightCheck();
+
+    fixConfigBtn.addEventListener('click', () => {
+        document.querySelector('[data-tab="settings"]').click();
+        apiKeyInput.focus();
+    });
+
+    // Save Settings
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+    saveSettingsBtn.addEventListener('click', () => {
+        localStorage.setItem('audioscribe_api_key', apiKeyInput.value.trim());
+        runPreflightCheck();
+        alert('Settings saved successfully!');
+    });
+
+    // --- 4. INTERACTIVE HOTKEY RECORDER ---
+    const hotkeyInput = document.getElementById('hotkey-recorder-input');
+    const recordHotkeyBtn = document.getElementById('record-hotkey-btn');
+    const activeHotkeyBadge = document.getElementById('active-hotkey-badge');
+    let isRecordingHotkey = false;
+
+    const savedShortcut = localStorage.getItem('audioscribe_shortcut') || 'F9';
+    hotkeyInput.value = savedShortcut;
+    activeHotkeyBadge.textContent = savedShortcut;
+
+    recordHotkeyBtn.addEventListener('click', () => {
+        isRecordingHotkey = true;
+        hotkeyInput.value = 'Press key combination...';
+        recordHotkeyBtn.textContent = 'Listening...';
+        recordHotkeyBtn.style.backgroundColor = '#ef4444';
+    });
+
+    document.addEventListener('keydown', async (e) => {
+        if (!isRecordingHotkey) return;
+        e.preventDefault();
+
+        const keys = [];
+        if (e.ctrlKey) keys.push('Control');
+        if (e.shiftKey) keys.push('Shift');
+        if (e.altKey) keys.push('Alt');
+        if (e.metaKey) keys.push('Command');
+
+        const key = e.key.toUpperCase();
+        if (!['CONTROL', 'SHIFT', 'ALT', 'META'].includes(key)) {
+            keys.push(key);
+        }
+
+        if (keys.length > 0) {
+            const shortcutString = keys.join('+');
+            isRecordingHotkey = false;
+            hotkeyInput.value = shortcutString;
+            activeHotkeyBadge.textContent = shortcutString;
+            recordHotkeyBtn.textContent = 'Record Hotkey';
+            recordHotkeyBtn.style.backgroundColor = '';
+
+            localStorage.setItem('audioscribe_shortcut', shortcutString);
+            if (window.api && window.api.registerShortcut) {
+                const res = await window.api.registerShortcut(shortcutString);
+                if (res && res.status === 'ok') {
+                    console.log(`[Hotkey] Registered ${shortcutString}`);
+                }
+            }
+        }
+    });
+
+    // --- 5. RECORDING CONTROL WITH PRE-FLIGHT VALIDATION ---
     const recordBtn = document.getElementById('record-toggle-btn');
     const recordLabel = document.getElementById('record-btn-label');
-    const statusDot = document.querySelector('.status-dot');
-    const statusText = document.querySelector('.status-text');
     const historyList = document.getElementById('transcription-list');
-    const audioSelect = document.getElementById('audio-device-select');
-    const runDiagBtn = document.getElementById('run-preflight-btn');
-    const diagBox = document.getElementById('diag-results');
-
+    const emptyHistory = document.getElementById('empty-history-state');
     let isRecording = false;
 
-    // Toggle Recording Button
     recordBtn.addEventListener('click', async () => {
+        // Run Pre-flight Check First!
+        const isReady = runPreflightCheck();
+        if (!isReady) {
+            return; // Abort recording if pre-flight fails!
+        }
+
         isRecording = !isRecording;
-        const command = isRecording ? 'start_recording' : 'stop_recording';
-        
+        updateRecordState(isRecording);
+
         if (window.api) {
-            const res = await window.api.sendCommand(command);
-            updateRecordState(isRecording);
+            const command = isRecording ? 'start_recording' : 'stop_recording';
+            await window.api.sendCommand(command);
         }
     });
 
@@ -40,111 +161,16 @@ document.addEventListener('DOMContentLoaded', () => {
         isRecording = recording;
         if (recording) {
             recordBtn.classList.add('recording');
-            recordLabel.textContent = 'Recording... Press F9 to Stop';
-            statusDot.className = 'status-dot yellow';
-            statusText.textContent = 'Recording';
+            recordLabel.textContent = 'Recording... Click or press hotkey to stop';
         } else {
             recordBtn.classList.remove('recording');
-            recordLabel.textContent = 'Start Recording (F9)';
-            statusDot.className = 'status-dot green';
-            statusText.textContent = 'Engine Ready';
+            recordLabel.textContent = 'Start Recording';
         }
     }
 
-    // Populate Audio Devices
-    async function loadAudioDevices() {
-        if (!window.api) return;
-        try {
-            const res = await window.api.sendCommand('get_devices');
-            if (res && res.status === 'ok' && res.devices) {
-                audioSelect.innerHTML = '<option value="">Auto / Default Microphone</option>';
-                res.devices.forEach(dev => {
-                    const opt = document.createElement('option');
-                    opt.value = dev.index;
-                    opt.textContent = `${dev.name} (Index ${dev.index})`;
-                    audioSelect.appendChild(opt);
-                });
-            }
-        } catch (e) {
-            console.error('Error fetching audio devices:', e);
-        }
-    }
-
-    loadAudioDevices();
-
-    // Listen to Engine Events
-    if (window.api) {
-        window.api.onEngineEvent((eventData) => {
-            if (eventData.event === 'status_changed') {
-                const status = eventData.data.status;
-                if (status === 'recording') updateRecordState(true);
-                else if (status === 'ready') updateRecordState(false);
-            } else if (eventData.event === 'transcription_result') {
-                addHistoryItem(eventData.data.text, eventData.data.latency_ms);
-            }
-        });
-    }
-
-    function addHistoryItem(text, latencyMs) {
-        const emptyState = historyList.querySelector('.empty-state');
-        if (emptyState) emptyState.remove();
-
-        const item = document.createElement('div');
-        item.className = 'history-item';
-        item.innerHTML = `
-            <div class="history-text">${text}</div>
-            <div class="history-meta">
-                ${latencyMs ? `<span class="pill">⚡ ${Math.round(latencyMs)}ms</span>` : ''}
-                <button class="copy-btn" onclick="navigator.clipboard.writeText('${text.replace(/'/g, "\\'")}')">Copy</button>
-            </div>
-        `;
-        historyList.prepend(item);
-    }
-
-    // Check for Updates Button
-    const checkUpdatesBtn = document.getElementById('check-updates-btn');
-    const updateMsg = document.getElementById('update-status-msg');
-
-    if (checkUpdatesBtn) {
-        checkUpdatesBtn.addEventListener('click', async () => {
-            if (updateMsg) updateMsg.textContent = 'Checking GitHub for updates...';
-            if (window.api) {
-                const res = await window.api.sendCommand('check_updates');
-                if (res && res.status === 'ok') {
-                    if (res.update_available && res.update_info) {
-                        const info = res.update_info;
-                        updateMsg.innerHTML = `🚀 <strong style="color:#10b981">Update Available! (v${info.latest_version})</strong><br>` +
-                            `<a href="${info.release_url}" target="_blank" style="color:#6366f1">Click here to download release</a>`;
-                    } else {
-                        updateMsg.textContent = '✅ You are on the latest version of AudioScribe (v1.0.0).';
-                    }
-                }
-            }
-        });
-    }
-
-    // Preflight Diagnostics Button
-    if (runDiagBtn) {
-        runDiagBtn.addEventListener('click', async () => {
-            diagBox.textContent = 'Running system diagnostic check...';
-            if (window.api) {
-                const res = await window.api.sendCommand('preflight');
-                if (res && res.status === 'ok') {
-                    if (res.ready) {
-                        diagBox.textContent = '✅ [OK] Pre-flight Check: All systems ready!\nNo critical errors or warnings detected.';
-                    } else {
-                        let report = `[PRE-FLIGHT REPORT]\n\nErrors (${res.errors.length}):\n`;
-                        res.errors.forEach((err, idx) => {
-                            report += ` [${idx + 1}] ${err.component}: ${err.issue}\n     Remediation: ${err.remediation}\n\n`;
-                        });
-                        report += `Warnings (${res.warnings.length}):\n`;
-                        res.warnings.forEach((warn, idx) => {
-                            report += ` [${idx + 1}] ${warn.component}: ${warn.issue}\n     Remediation: ${warn.remediation}\n\n`;
-                        });
-                        diagBox.textContent = report;
-                    }
-                }
-            }
-        });
-    }
+    // Clear History
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    clearHistoryBtn.addEventListener('click', () => {
+        historyList.innerHTML = '<div class="empty-state" id="empty-history-state"><p>Press hotkey anywhere on your computer to start dictating.</p></div>';
+    });
 });

@@ -224,20 +224,43 @@ function toggleRecording() {
     }
 }
 
+let currentShortcut = 'F9';
+
+function registerShortcut(newKey) {
+    try {
+        globalShortcut.unregisterAll();
+        const success = globalShortcut.register(newKey, () => {
+            toggleRecording();
+        });
+        if (success) {
+            currentShortcut = newKey;
+            return { status: 'ok', shortcut: newKey };
+        } else {
+            // Fallback to F9
+            globalShortcut.register('F9', () => toggleRecording());
+            currentShortcut = 'F9';
+            return { status: 'error', error: `Could not register key '${newKey}'. Reverted to F9.` };
+        }
+    } catch (err) {
+        return { status: 'error', error: err.message };
+    }
+}
+
 app.whenReady().then(() => {
     createMainWindow();
     createOverlayWindow();
     createTray();
     launchPythonSidecar();
 
-    // Register F9 global hotkey
-    globalShortcut.register('F9', () => {
-        toggleRecording();
-    });
+    registerShortcut('F9');
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
     });
+});
+
+ipcMain.handle('register-shortcut', async (event, key) => {
+    return registerShortcut(key);
 });
 
 ipcMain.handle('engine-command', async (event, { command, params }) => {
