@@ -73,7 +73,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
             'active_model': self.active_model,
         }
 
-    def _prepare_messages(self, text: str, history: Optional[List[Dict[str, str]]] = None) -> List[Dict]:
+    def _prepare_messages(self, text: str, history: Optional[List[Dict[str, str]]] = None, system_prompt_override: Optional[str] = None) -> List[Dict]:
         """
         Prepare messages for LLM completion.
 
@@ -87,8 +87,9 @@ class LiteLLMProcessor(AbstractLLMProcessor):
         messages = []
 
         # Add system prompt if configured
-        if self.system_prompt:
-            messages.append({"content": self.system_prompt, "role": "system"})
+        system_prompt = system_prompt_override or self.system_prompt
+        if system_prompt:
+            messages.append({"content": system_prompt, "role": "system"})
 
         # Add conversation history if provided
         if history:
@@ -141,7 +142,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
         else:
             return str(response)
 
-    def _process_with_fallback(self, text: str, history: Optional[List[Dict[str, str]]] = None) -> Optional[str]:
+    def _process_with_fallback(self, text: str, history: Optional[List[Dict[str, str]]] = None, system_prompt_override: Optional[str] = None) -> Optional[str]:
         """
         Process text with retry and fallback support.
 
@@ -152,7 +153,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
         Returns:
             Processed text, or None if all models failed
         """
-        messages = self._prepare_messages(text, history)
+        messages = self._prepare_messages(text, history, system_prompt_override)
         self.last_fallback_used = False
 
         # Try each model in the chain
@@ -200,7 +201,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
         print("✗ All fallback models exhausted")
         return None
 
-    def process(self, text: str) -> Optional[str]:
+    def process(self, text: str, system_prompt_override: Optional[str] = None) -> Optional[str]:
         """
         Process text with LLM.
 
@@ -210,7 +211,7 @@ class LiteLLMProcessor(AbstractLLMProcessor):
         Returns:
             Processed text, or None if processing failed
         """
-        return self._process_with_fallback(text)
+        return self._process_with_fallback(text, system_prompt_override=system_prompt_override)
 
     def process_with_history(self, text: str, history: List[Dict[str, str]]) -> Optional[str]:
         """

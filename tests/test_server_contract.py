@@ -1,4 +1,5 @@
 import asyncio
+import queue
 from types import SimpleNamespace
 
 from core.api.server import AudioScribeServer
@@ -10,6 +11,18 @@ class FakeAudio:
 
     def set_device(self, index):
         self.device_index = index
+
+
+class RecordingFakeAudio(FakeAudio):
+    def health_check(self):
+        return None
+
+    def start_recording(self):
+        self.is_recording = True
+
+    def stop_recording(self):
+        self.is_recording = False
+        return b"wav"
 
 
 def test_server_exposes_status_and_device_contract():
@@ -48,3 +61,21 @@ def test_effective_config_keeps_transcription_and_llm_separate():
     assert effective["llm"]["provider"] == "openrouter"
     assert effective["llm"]["base_url"] == "https://openrouter.ai/api/v1"
     assert effective["transcription"]["api_key_configured"] is True
+
+
+def test_profile_is_carried_from_recording_commands_to_processing_queue():
+    audio = RecordingFakeAudio()
+    orchestrator = SimpleNamespace(
+        audio_input=audio,
+        _processing_queue=queue.Queue(),
+        add_event_listener=lambda listener: None,
+    )
+    server = AudioScribeServer(orchestrator=orchestrator)
+    profile = {"id": "translate", "name": "Translate", "prompt": "Translate to English."}
+
+    started = asyncio.run(server._process_command("start_recording", {"profile": profile}))
+    stopped = asyncio.run(server._process_command("stop_recording", {}))
+
+    assert started["status"] == "ok"
+    assert stopped["profile"] == profile
+    assert orchestrator._processing_queue.get_nowait() == (b"wav", profile)

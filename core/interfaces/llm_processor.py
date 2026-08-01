@@ -11,7 +11,7 @@ class AbstractLLMProcessor(ABC):
     """Abstract base class for LLM text processors."""
     
     @abstractmethod
-    def process(self, text: str) -> Optional[str]:
+    def process(self, text: str, system_prompt_override: Optional[str] = None) -> Optional[str]:
         """
         Process text with LLM.
         

@@ -22,6 +22,7 @@ class AudioScribeServer:
         self.clients = set()
         self.server = None
         self._loop = None
+        self._active_profile = None
         self.config = getattr(orchestrator, "config", None) if orchestrator else None
         if orchestrator:
             self.set_orchestrator(orchestrator)
@@ -138,10 +139,13 @@ class AudioScribeServer:
                     if self.orchestrator.audio_input.is_recording:
                         return {"status": "error", "code": "already_recording", "error": "A gravação já está ativa."}
                     self.orchestrator.audio_input.health_check()
+                    profile = params.get("profile")
+                    self._active_profile = profile if isinstance(profile, dict) else None
                     self.orchestrator.audio_input.start_recording()
                     await self.broadcast("status_changed", {"status": "recording"})
                     return {"status": "ok", "recording": True}
                 except Exception as exc:
+                    self._active_profile = None
                     return {"status": "error", "code": "audio_not_ready", "error": str(exc), "remediation": "Verifique o microfone e as permissões de áudio em Diagnostics."}
             return {"status": "error", "code": "audio_unavailable", "error": "Entrada de áudio não inicializada."}
 
@@ -153,9 +157,12 @@ class AudioScribeServer:
                     audio_bytes = self.orchestrator.audio_input.stop_recording()
                     await self.broadcast("status_changed", {"status": "processing"})
                     if audio_bytes:
-                        self.orchestrator._processing_queue.put(audio_bytes)
-                    return {"status": "ok", "recording": False}
+                        self.orchestrator._processing_queue.put((audio_bytes, self._active_profile))
+                    profile = self._active_profile
+                    self._active_profile = None
+                    return {"status": "ok", "recording": False, "profile": profile}
                 except Exception as exc:
+                    self._active_profile = None
                     return {"status": "error", "code": "audio_stop_failed", "error": str(exc), "remediation": "Verifique o estado do microfone e tente novamente."}
             return {"status": "error", "code": "audio_unavailable", "error": "Entrada de áudio não inicializada."}
 

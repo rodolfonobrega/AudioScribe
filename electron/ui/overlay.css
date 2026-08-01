@@ -10,6 +10,12 @@ body { height: 100vh; display: flex; align-items: center; justify-content: cente
 .overlay-status { min-width: 74px; color: #f0f1ed; }
 .wave-equalizer { display: flex; align-items: center; gap: 3px; height: 14px; padding-left: 2px; }
 .bar { width: 2px; height: 100%; border-radius: 2px; background: #d5a45b; transform: scaleY(.3); transform-origin: center; transition: transform .08s ease; }
+.wave-equalizer.recording .bar { animation: equalizer-breathe .72s ease-in-out infinite alternate; }
+.wave-equalizer.recording .bar2 { animation-delay: -.2s; }
+.wave-equalizer.recording .bar3 { animation-delay: -.48s; }
+.wave-equalizer.recording .bar4 { animation-delay: -.12s; }
+.wave-equalizer.recording .bar5 { animation-delay: -.36s; }
 .hotkey-hint { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 7px; border: 1px solid rgba(240, 241, 237, .2); border-radius: 3px; background: rgba(255, 255, 255, .06); color: #b0b5b3; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; font-weight: 600; }
 @keyframes state-pulse { 0% { box-shadow: 0 0 0 0 rgba(213, 164, 91, .55); } 70%, 100% { box-shadow: 0 0 0 7px rgba(213, 164, 91, 0); } }
-@media (prefers-reduced-motion: reduce) { .state-dot.pulse { animation: none; } }
+@keyframes equalizer-breathe { from { transform: scaleY(.25); opacity: .6; } to { transform: scaleY(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .state-dot.pulse, .wave-equalizer.recording .bar { animation: none; } }

@@ -269,53 +269,96 @@ document.addEventListener('DOMContentLoaded', () => {
         $('llm-provider-status').textContent = ready ? 'Verified' : 'Needs attention';
     });
 
-    // Global hotkey recorder
-    let listeningForHotkey = false;
+    // Global and profile hotkey recorder. Electron uses "Control" internally,
+    // while the UI keeps the familiar "Ctrl" label for users.
+    let hotkeyCapture = null;
     const prettyKey = (event) => {
-        const modifiers = [];
-        if (event.ctrlKey) modifiers.push('Ctrl');
-        if (event.altKey) modifiers.push('Alt');
-        if (event.shiftKey) modifiers.push('Shift');
-        if (event.metaKey) modifiers.push('Super');
+        const accelerators = [];
+        const labels = [];
+        if (event.ctrlKey) { accelerators.push('Control'); labels.push('Ctrl'); }
+        if (event.altKey) { accelerators.push('Alt'); labels.push('Alt'); }
+        if (event.shiftKey) { accelerators.push('Shift'); labels.push('Shift'); }
+        if (event.metaKey) { accelerators.push('Super'); labels.push('Super'); }
         const key = event.code.startsWith('Key') ? event.code.slice(3) : event.code.startsWith('Digit') ? event.code.slice(5) : event.code;
-        return { accelerator: [...modifiers, key].join('+'), pretty: [...modifiers, key].join(' + ') };
+        return { accelerator: [...accelerators, key].join('+'), pretty: [...labels, key].join(' + ') };
     };
-    const shortcut = localStorage.getItem('audioscribe_shortcut') || 'F9';
-    $('hotkey-recorder-input').value = shortcut;
-    $('active-hotkey-badge').textContent = shortcut;
-    $('sidebar-hotkey').textContent = shortcut;
-    $('record-hotkey-btn')?.addEventListener('click', () => {
-        listeningForHotkey = true;
-        $('hotkey-recorder-input').value = 'Press a key combination...';
-    });
+    const displayShortcut = (value) => String(value || '')
+        .replace(/Control/g, 'Ctrl')
+        .replace(/CommandOrControl/g, 'Ctrl')
+        .replace(/\s*\+\s*/g, ' + ');
+    const acceleratorFromStored = (value) => String(value || 'F9')
+        .replace(/Ctrl/g, 'Control')
+        .replace(/\s*\+\s*/g, '+');
+    const beginHotkeyCapture = (target) => {
+        hotkeyCapture = target;
+        if (target.type === 'global') {
+            $('hotkey-recorder-input').value = 'Press a key combination...';
+            $('record-hotkey-btn').textContent = 'Press a key...';
+        } else if (target.button) {
+            target.button.textContent = 'Press a key...';
+            target.button.classList.add('is-listening');
+        }
+    };
+    const endHotkeyCapture = () => {
+        const target = hotkeyCapture;
+        hotkeyCapture = null;
+        if (target?.type === 'global') $('record-hotkey-btn').textContent = 'Record Hotkey';
+        if (target?.button) {
+            target.button.textContent = 'Record shortcut';
+            target.button.classList.remove('is-listening');
+        }
+    };
+    const configuredShortcut = localStorage.getItem('audioscribe_shortcut') || 'F9';
+    const configuredAccelerator = localStorage.getItem('audioscribe_shortcut_accelerator') || acceleratorFromStored(configuredShortcut);
+    $('hotkey-recorder-input').value = displayShortcut(configuredShortcut);
+    $('active-hotkey-badge').textContent = displayShortcut(configuredShortcut);
+    $('sidebar-hotkey').textContent = displayShortcut(configuredShortcut);
+    api?.registerShortcut?.(configuredAccelerator);
+    $('record-hotkey-btn')?.addEventListener('click', () => beginHotkeyCapture({ type: 'global' }));
     document.addEventListener('keydown', async (event) => {
-        if (!listeningForHotkey) return;
+        if (!hotkeyCapture) return;
         event.preventDefault();
         const result = prettyKey(event);
         if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return;
-        listeningForHotkey = false;
-        const response = await api?.registerShortcut?.(result.accelerator);
-        if (response?.status === 'ok') {
-            $('hotkey-recorder-input').value = result.pretty;
-            $('active-hotkey-badge').textContent = result.pretty;
-            $('sidebar-hotkey').textContent = result.pretty;
-            localStorage.setItem('audioscribe_shortcut', result.pretty);
-        } else {
-            $('hotkey-recorder-input').value = shortcut;
-            alert(response?.error || 'Could not register shortcut.');
+        const target = hotkeyCapture;
+        endHotkeyCapture();
+        if (target.type === 'global') {
+            const response = await api?.registerShortcut?.(result.accelerator);
+            if (response?.status === 'ok') {
+                $('hotkey-recorder-input').value = result.pretty;
+                $('active-hotkey-badge').textContent = result.pretty;
+                $('sidebar-hotkey').textContent = result.pretty;
+                localStorage.setItem('audioscribe_shortcut', result.pretty);
+                localStorage.setItem('audioscribe_shortcut_accelerator', result.accelerator);
+            } else {
+                $('hotkey-recorder-input').value = displayShortcut(configuredShortcut);
+                alert(response?.error || 'Could not register shortcut.');
+            }
+            return;
         }
+        const profile = profiles.find((item) => item.id === target.profileId);
+        if (!profile) return;
+        const previousShortcut = profile.shortcut;
+        profile.shortcut = result.accelerator;
+        const response = await saveProfiles();
+        if (response?.status !== 'ok') {
+            profile.shortcut = previousShortcut;
+            await saveProfiles();
+            alert(response?.error || 'Could not register profile shortcut.');
+        }
+        renderProfiles();
     });
 
     // Profiles are kept local, but rendered without interpolating user text into HTML.
     const defaultProfiles = [
-        { id: 'prof_std', name: 'Review and clarity', enabled: true, shortcut: 'F9', prompt: 'Fix grammar, punctuation and filler words while preserving meaning. Return only the revised text.' },
-        { id: 'prof_trans', name: 'Translate to English', enabled: true, shortcut: 'Ctrl+Shift+E', prompt: 'Translate the transcription into natural professional English. Return only the translation.' },
+        { id: 'prof_std', name: 'Review and clarity', enabled: true, shortcut: 'Control+Alt+R', prompt: 'Fix grammar, punctuation and filler words while preserving meaning. Return only the revised text.' },
+        { id: 'prof_trans', name: 'Translate to English', enabled: true, shortcut: 'Control+Shift+E', prompt: 'Translate the transcription into natural professional English. Return only the translation.' },
     ];
     let profiles;
     try { profiles = JSON.parse(localStorage.getItem('audioscribe_profiles') || 'null') || defaultProfiles; } catch { profiles = defaultProfiles; }
     const saveProfiles = () => {
         localStorage.setItem('audioscribe_profiles', JSON.stringify(profiles));
-        api?.updateProfiles?.(profiles);
+        return api?.updateProfiles?.(profiles);
     };
     const renderProfiles = () => {
         const list = $('profiles-list');
@@ -335,7 +378,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const prompt = document.createElement('textarea');
             prompt.className = 'profile-prompt-preview'; prompt.rows = 2; prompt.value = profile.prompt;
             const actions = document.createElement('div'); actions.className = 'profile-actions-row';
-            const hotkey = document.createElement('span'); hotkey.className = 'profile-hotkey-group'; hotkey.textContent = `Shortcut: ${profile.shortcut || 'none'}`;
+            const hotkey = document.createElement('div'); hotkey.className = 'profile-hotkey-group';
+            const hotkeyLabel = document.createElement('span'); hotkeyLabel.textContent = `Shortcut: ${displayShortcut(profile.shortcut) || 'none'}`;
+            const hotkeyButton = document.createElement('button'); hotkeyButton.className = 'btn-link profile-hotkey-btn'; hotkeyButton.type = 'button'; hotkeyButton.textContent = 'Record shortcut';
+            hotkeyButton.addEventListener('click', () => beginHotkeyCapture({ type: 'profile', profileId: profile.id, button: hotkeyButton }));
+            hotkey.append(hotkeyLabel, hotkeyButton);
             const save = document.createElement('button');
             save.className = 'btn-primary-sm'; save.textContent = 'Save & Apply';
             save.addEventListener('click', () => { profile.prompt = prompt.value.trim(); profile.enabled = enabled.checked; saveProfiles(); });
@@ -349,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = prompt('Profile name:', 'Custom rule');
         const promptText = name && prompt('Profile instruction:', 'Review and organize the text...');
         if (!name || !promptText) return;
-        profiles.push({ id: `prof_${Date.now()}`, name: name.trim(), enabled: true, shortcut: `Ctrl+Alt+${profiles.length + 1}`, prompt: promptText.trim() });
+        profiles.push({ id: `prof_${Date.now()}`, name: name.trim(), enabled: true, shortcut: `Control+Alt+${profiles.length + 1}`, prompt: promptText.trim() });
         saveProfiles(); renderProfiles();
     });
 

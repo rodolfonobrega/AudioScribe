@@ -116,17 +116,21 @@ class TranscriptionOrchestrator:
         while not self._stop_event.is_set():
             try:
                 # Get audio data from queue with timeout
-                audio_data = self._processing_queue.get(timeout=0.5)
+                queued = self._processing_queue.get(timeout=0.5)
+                if isinstance(queued, tuple):
+                    audio_data, profile = queued
+                else:
+                    audio_data, profile = queued, None
                 
                 # Process audio
-                self._process_audio(audio_data)
+                self._process_audio(audio_data, profile=profile)
                 
             except queue.Empty:
                 continue
             except Exception as e:
                 print(f"Processing error: {e}")
     
-    def _process_audio(self, audio_data: bytes):
+    def _process_audio(self, audio_data: bytes, profile=None):
         """Process audio data through the pipeline."""
         try:
             from core.implementations.audio.sounddevice_input import calculate_rms
@@ -169,7 +173,11 @@ class TranscriptionOrchestrator:
                     self.ui.update_live_status("llm")
                 self._emit_event("status_changed", {"status": "llm", "request_id": request_id})
                 
-                enhanced_text = self.llm_processor.process(text)
+                profile_prompt = (profile or {}).get("prompt") if isinstance(profile, dict) else None
+                enhanced_text = (
+                    self.llm_processor.process(text, system_prompt_override=profile_prompt)
+                    if profile_prompt else self.llm_processor.process(text)
+                )
                 
                 if enhanced_text:
                     text = enhanced_text

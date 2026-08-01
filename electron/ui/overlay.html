@@ -98,6 +98,7 @@
                 playStartChime();
                 statusEl.textContent = 'Recording...';
                 dotEl.className = 'state-dot pulse';
+                document.getElementById('wave-eq').classList.add('recording');
                 
                 // Animate bars based on live RMS volume
                 const scale = Math.min(1.0, Math.max(0.15, (rms || 0.05) * 15));
@@ -109,10 +110,12 @@
                 playStopChime();
                 statusEl.textContent = 'Transcribing...';
                 dotEl.className = 'state-dot yellow';
+                document.getElementById('wave-eq').classList.remove('recording');
                 eqBars.forEach(bar => bar.style.transform = 'scaleY(0.3)');
             } else if (status === 'done') {
                 statusEl.textContent = text ? `Pasted!` : 'Done!';
                 dotEl.className = 'state-dot green';
+                document.getElementById('wave-eq').classList.remove('recording');
             }
         });
     </script>

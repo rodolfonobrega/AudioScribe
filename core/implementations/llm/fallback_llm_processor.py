@@ -76,7 +76,8 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
     def _process_with_fallback(
         self,
         text: str,
-        history: Optional[List[Dict[str, str]]] = None
+        history: Optional[List[Dict[str, str]]] = None,
+        system_prompt_override: Optional[str] = None,
     ) -> Optional[str]:
         """
         Process text with fallback across implementations.
@@ -99,7 +100,7 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
                     if history:
                         result = processor.process_with_history(text, history)
                     else:
-                        result = processor.process(text)
+                        result = processor.process(text, system_prompt_override=system_prompt_override)
 
                     if result is not None:
                         self.last_usage = getattr(processor, "last_usage", self.last_usage)
@@ -138,7 +139,7 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
         print("✗ All fallback processors exhausted")
         return None
 
-    def process(self, text: str) -> Optional[str]:
+    def process(self, text: str, system_prompt_override: Optional[str] = None) -> Optional[str]:
         """
         Process text with LLM.
 
@@ -148,7 +149,7 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
         Returns:
             Processed text, or None if processing failed
         """
-        return self._process_with_fallback(text)
+        return self._process_with_fallback(text, system_prompt_override=system_prompt_override)
 
     def process_with_history(self, text: str, history: List[Dict[str, str]]) -> Optional[str]:
         """

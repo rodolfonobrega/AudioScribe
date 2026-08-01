@@ -372,7 +372,10 @@ ipcMain.handle('retry-engine', async () => {
 
 async function toggleRecording(profile = null) {
     const command = isRecording ? 'stop_recording' : 'start_recording';
-    const result = await sendEngineRequest(command);
+    const params = command === 'start_recording' && profile
+        ? { profile: { id: profile.id, name: profile.name, prompt: profile.prompt } }
+        : {};
+    const result = await sendEngineRequest(command, params);
     if (result?.status !== 'ok') {
         console.error('[Electron] Recording command failed:', result?.error || result?.code);
         return result;
@@ -394,23 +397,26 @@ let currentShortcut = 'F9';
 function registerAllShortcuts() {
     globalShortcut.unregisterAll();
     const registered = [];
-    const candidates = [{ shortcut: currentShortcut, callback: () => toggleRecording() }];
+    const candidates = [{ shortcut: currentShortcut, callback: () => toggleRecording(), kind: 'global' }];
     activeProfiles.forEach((profile) => {
-        if (profile.enabled && profile.shortcut) candidates.push({ shortcut: profile.shortcut, callback: () => toggleRecording(profile) });
+        if (profile.enabled && profile.shortcut) candidates.push({ shortcut: profile.shortcut, callback: () => toggleRecording(profile), kind: 'profile', profileId: profile.id });
     });
-    candidates.forEach(({ shortcut, callback }) => {
+    const failed = [];
+    candidates.forEach(({ shortcut, callback, kind, profileId }) => {
         try {
-            if (globalShortcut.register(shortcut, callback)) registered.push(shortcut);
+            const accelerator = String(shortcut).replace(/Ctrl/g, 'Control').replace(/\s*\+\s*/g, '+');
+            if (globalShortcut.register(accelerator, callback)) registered.push(accelerator);
+            else failed.push({ shortcut: accelerator, kind, profileId });
         } catch (error) {
             console.error(`[Electron] Failed to register ${shortcut}:`, error.message);
+            failed.push({ shortcut, kind, profileId, error: error.message });
         }
     });
-    if (!registered.length && currentShortcut !== 'F9') {
+    if (!registered.registered.length && currentShortcut !== 'F9') {
         currentShortcut = 'F9';
-        globalShortcut.register('F9', () => toggleRecording());
-        registered.push('F9');
+        if (globalShortcut.register('F9', () => toggleRecording())) registered.registered.push('F9');
     }
-    return registered;
+    return { registered, failed };
 }
 
 function registerShortcut(newKey) {
@@ -418,7 +424,7 @@ function registerShortcut(newKey) {
         const previous = currentShortcut;
         currentShortcut = newKey;
         const registered = registerAllShortcuts();
-        if (registered.includes(newKey)) return { status: 'ok', shortcut: newKey };
+        if (registered.registered.includes(newKey.replace(/Ctrl/g, 'Control'))) return { status: 'ok', shortcut: newKey };
         currentShortcut = previous;
         registerAllShortcuts();
         return { status: 'error', error: `Could not register key '${newKey}'. Reverted to ${previous}.` };
@@ -444,8 +450,15 @@ let activeProfiles = [];
 
 function registerProfileShortcuts(profiles) {
     activeProfiles = profiles || [];
-    const registered = registerAllShortcuts();
-    return { status: 'ok', count: registered.length, registered };
+    const result = registerAllShortcuts();
+    const failedProfiles = result.failed.filter((item) => item.kind === 'profile');
+    return {
+        status: failedProfiles.length ? 'error' : 'ok',
+        count: result.registered.length,
+        registered: result.registered,
+        failed: failedProfiles,
+        error: failedProfiles.length ? `Could not register ${failedProfiles.length} profile shortcut(s). They may be in use by another application.` : undefined,
+    };
 }
 
 ipcMain.handle('update-profiles', async (event, profiles) => {
