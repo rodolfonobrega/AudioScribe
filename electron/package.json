@@ -1,13 +1,13 @@
 {
   "name": "audioscribe-desktop",
-  "version": "1.1.2",
+  "version": "1.0.0",
   "description": "AudioScribe Desktop - Cross-platform Speech-to-Text with AI",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux"
+    "build:win": "electron-builder --win nsis",
+    "build:mac": "electron-builder --mac zip",
+    "build:linux": "electron-builder --linux zip"
   },
   "keywords": [
     "audio",
