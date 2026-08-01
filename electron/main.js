@@ -172,13 +172,24 @@ function launchPythonSidecar() {
         const binName = process.platform === 'win32' ? 'audioscribe_engine.exe' : 'audioscribe_engine';
         executable = path.join(process.resourcesPath, 'bin', binName);
         args = ['--server', '--port', '8765'];
+        if (!require('fs').existsSync(executable)) {
+            console.log('[Electron] Standalone mode: Running Native Node.js Engine (no sidecar binary required).');
+            return;
+        }
     } else {
         executable = process.platform === 'win32' ? 'python' : 'python3';
         const scriptPath = path.join(__dirname, '..', 'main.py');
         args = [scriptPath, '--server', '--port', '8765'];
     }
 
-    pythonProcess = spawn(executable, args);
+    try {
+        pythonProcess = spawn(executable, args);
+        pythonProcess.on('error', (err) => {
+            console.log('[Electron] Running in Pure Native Node.js mode.');
+        });
+    } catch (e) {
+        console.log('[Electron] Running in Pure Native Node.js mode.');
+    }
 
     pythonProcess.stdout.on('data', (data) => {
         console.log(`[Python Engine]: ${data}`);
