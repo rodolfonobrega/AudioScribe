@@ -7,44 +7,11 @@ import threading
 import queue
 from typing import List, Dict, Any, Optional
 
-try:
-    import sounddevice as sd
-except ImportError:
-    sd = None
-
-try:
-    import soundfile as sf
-except ImportError:
-    sf = None
-
-try:
-    import numpy as np
-except ImportError:
-    np = None
+import sounddevice as sd
+import soundfile as sf
+import numpy as np
 
 from core.interfaces.audio_input import AbstractAudioInput
-
-
-def calculate_rms(audio_data) -> float:
-    """Calculate Root Mean Square (RMS) power of audio samples or WAV bytes."""
-    if audio_data is None or np is None:
-        return 0.0
-    try:
-        if isinstance(audio_data, bytes):
-            if len(audio_data) <= 44:
-                return 0.0
-            samples = np.frombuffer(audio_data[44:], dtype=np.int16)
-            if len(samples) == 0:
-                return 0.0
-            float_samples = samples.astype(np.float32) / 32768.0
-            return float(np.sqrt(np.mean(np.square(float_samples))))
-        elif hasattr(audio_data, 'dtype'):
-            if len(audio_data) == 0:
-                return 0.0
-            return float(np.sqrt(np.mean(np.square(audio_data.astype(np.float32)))))
-    except Exception:
-        return 0.0
-    return 0.0
 
 
 class SoundDeviceInput(AbstractAudioInput):
@@ -77,9 +44,6 @@ class SoundDeviceInput(AbstractAudioInput):
         Returns:
             String description of device (Name (Index N))
         """
-        if sd is None:
-            return "N/A (sounddevice ausente)"
-
         try:
             target_index = self.device_index
             
@@ -159,22 +123,86 @@ class SoundDeviceInput(AbstractAudioInput):
             if device_index is not None:
                 device_kwargs['device'] = device_index
             
-            # Start audio stream
-            
-            # Start audio stream
-            with sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                dtype=self.dtype,
-                callback=self._recording_callback,
-                **device_kwargs
-            ) as stream:
-                self._stream = stream
-                # Keep recording until stop event
-                while not self._stop_event.is_set():
-                    sd.sleep(100)
+            # Attempt 1: sounddevice InputStream
+            opened = False
+            last_err = None
+            for sr in [self.sample_rate, 44100, 48000, 16000]:
+                try:
+                    kwargs = {'device': device_index} if device_index is not None else {}
+                    stream = sd.InputStream(
+                        samplerate=sr,
+                        channels=self.channels,
+                        dtype=self.dtype,
+                        callback=self._recording_callback,
+                        **kwargs
+                    )
+                    stream.start()
+                    opened = True
+                    self._actual_sample_rate = sr
+                    try:
+                        while not self._stop_event.is_set():
+                            sd.sleep(100)
+                    finally:
+                        try:
+                            stream.stop()
+                            stream.close()
+                        except Exception:
+                            pass
+                    break
+                except Exception as e:
+                    last_err = e
+                    continue
+
+            # Attempt 2: PyAudio fallback if sounddevice stream fails
+            if not opened:
+                try:
+                    import pyaudio
+                    p = pyaudio.PyAudio()
+                    pa_stream = None
+                    actual_sr = 44100
+                    for sr in [44100, 48000, 16000]:
+                        try:
+                            pa_stream = p.open(
+                                format=pyaudio.paInt16,
+                                channels=1,
+                                rate=sr,
+                                input=True,
+                                input_device_index=device_index,
+                                frames_per_buffer=1024
+                            )
+                            actual_sr = sr
+                            opened = True
+                            self._actual_sample_rate = sr
+                            break
+                        except Exception:
+                            continue
+
+                    if pa_stream:
+                        print(f"[SoundDeviceInput] Recording using PyAudio fallback at {actual_sr} Hz")
+                        try:
+                            while not self._stop_event.is_set():
+                                try:
+                                    data = pa_stream.read(1024, exception_on_overflow=False)
+                                    # Convert int16 bytes to float32 numpy array
+                                    samples = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                                    self._audio_queue.put(samples[:, np.newaxis])
+                                except Exception:
+                                    pass
+                        finally:
+                            try:
+                                pa_stream.stop_stream()
+                                pa_stream.close()
+                                p.terminate()
+                            except Exception:
+                                pass
+                except Exception as py_err:
+                    last_err = py_err
+
+            if not opened:
+                print(f"[SoundDeviceInput] Recording error: {last_err}")
+                self._is_recording = False
         except Exception as e:
-            print(f"Recording error: {e}")
+            print(f"[SoundDeviceInput] Recording error: {e}")
             self._is_recording = False
     
     def stop_recording(self) -> bytes:
@@ -212,11 +240,25 @@ class SoundDeviceInput(AbstractAudioInput):
         
         # Concatenate chunks
         audio_data = np.concatenate(audio_chunks, axis=0)
+        actual_sr = getattr(self, '_actual_sample_rate', self.sample_rate)
         
-        # Convert to WAV bytes
+        # Resample to 16000 Hz if recorded at a different hardware rate (e.g. 44100/48000 Hz)
+        if actual_sr != 16000 and len(audio_data) > 0:
+            flat_audio = audio_data.squeeze()
+            duration = len(flat_audio) / float(actual_sr)
+            target_len = int(round(duration * 16000))
+            x_orig = np.linspace(0, duration, len(flat_audio), endpoint=False)
+            x_target = np.linspace(0, duration, target_len, endpoint=False)
+            audio_data = np.interp(x_target, x_orig, flat_audio).astype(np.float32)
+        
+        # Convert to OGG Vorbis bytes at 16000 Hz (with WAV fallback)
         import io
         buffer = io.BytesIO()
-        sf.write(buffer, audio_data, self.sample_rate, format='WAV')
+        try:
+            sf.write(buffer, audio_data, 16000, format='OGG', subtype='VORBIS')
+        except Exception:
+            buffer = io.BytesIO()
+            sf.write(buffer, audio_data, 16000, format='WAV')
         return buffer.getvalue()
     
     def list_devices(self) -> List[Dict[str, Any]]:
@@ -262,60 +304,84 @@ class SoundDeviceInput(AbstractAudioInput):
         """Set the audio input device."""
         self.device_index = device_index
 
-    def health_check(self) -> None:
-        """
-        Validate audio input device by attempting to open a stream.
-        """
-        if sd is None or sf is None or np is None:
-            raise RuntimeError(
-                "Dependências de áudio ausentes (sounddevice, soundfile ou numpy).\n"
-                "💡 Instale executando: pip install -r requirements.txt"
-            )
-
+    def _resolve_working_device_index(self) -> Optional[int]:
+        """Find a working input device index."""
+        # 1. Try PyAudio default input device
         try:
-            device_index = self.device_index
-            if device_index is None:
-                # Use same logic as _record_audio/get_device_name to find device
-                try:
-                    default_in = sd.default.device[0]
-                    if default_in >= 0:
-                        device_index = default_in
-                    else:
-                        devices = sd.query_devices()
-                        for i, dev in enumerate(devices):
-                            if dev.get('max_input_channels', 0) > 0:
-                                device_index = i
-                                break
-                except:
-                    pass
-            
-            if device_index is None:
-                raise RuntimeError(
-                    "Nenhum dispositivo de entrada de áudio (microfone) foi encontrado no sistema.\n"
-                    "💡 Soluções:\n"
-                    "  • Conecte um microfone.\n"
-                    "  • No macOS: Conceda permissão em 'Ajustes do Sistema > Privacidade e Segurança > Microfone'.\n"
-                    "  • No Linux: Verifique se o ALSA/PulseAudio está ativo (`sudo apt install libportaudio2`)."
-                )
-
-            # Test stream creation
-            device_kwargs = {'device': device_index}
+            import pyaudio
+            p = pyaudio.PyAudio()
             try:
-                with sd.InputStream(
-                    samplerate=self.sample_rate,
-                    channels=self.channels,
-                    dtype=self.dtype,
-                    **device_kwargs
-                ):
-                    pass
-            except Exception as e:
-                raise RuntimeError(
-                    f"Falha ao acessar dispositivo de áudio (Index {device_index}): {e}\n"
-                    "💡 Verifique se o microfone não está em uso exclusivo por outro aplicativo."
-                )
+                info = p.get_default_input_device_info()
+                idx = info.get('index')
+                p.terminate()
+                return idx
+            except Exception:
+                p.terminate()
+        except Exception:
+            pass
+
+        # 2. Fall back to sounddevice
+        if sd is not None:
+            try:
+                default_in = sd.default.device[0]
+                if default_in is not None and default_in >= 0:
+                    return default_in
+            except Exception:
+                pass
+        return None
+
+    def health_check(self) -> None:
+        """Validate audio input device by attempting to open a stream."""
+        # Attempt 1: PyAudio stream check
+        try:
+            import pyaudio
+            p = pyaudio.PyAudio()
+            pa_stream = None
+            for sr in [44100, 48000, 16000]:
+                try:
+                    pa_stream = p.open(
+                        format=pyaudio.paInt16,
+                        channels=1,
+                        rate=sr,
+                        input=True,
+                        input_device_index=self.device_index,
+                        frames_per_buffer=1024
+                    )
+                    break
+                except Exception:
+                    continue
+            if pa_stream:
+                pa_stream.stop_stream()
+                pa_stream.close()
+                p.terminate()
+                return  # PyAudio validated input device successfully!
+            p.terminate()
+        except Exception:
+            pass
+
+        # Attempt 2: sounddevice stream check
+        try:
+            device_index = self.device_index or self._resolve_working_device_index()
+            opened = False
+            last_err = None
+            if device_index is not None and sd is not None:
+                for sr in [self.sample_rate, 48000, 44100, 16000]:
+                    for ch in [self.channels, 1, 2]:
+                        try:
+                            with sd.InputStream(samplerate=sr, channels=ch, dtype=self.dtype, device=device_index):
+                                opened = True
+                                break
+                        except Exception as e:
+                            last_err = e
+                            continue
+                    if opened:
+                        break
+
+            if not opened:
+                raise RuntimeError(f"Failed to access audio input device: {last_err or 'No working device found'}")
                 
         except Exception as e:
-            raise RuntimeError(f"Validação do áudio de entrada falhou: {e}")
+            raise RuntimeError(f"Audio input validation failed: {e}")
 
     @property
     def is_recording(self) -> bool:
@@ -339,3 +405,28 @@ class SoundDeviceInput(AbstractAudioInput):
     @channels.setter
     def channels(self, value: int):
         self._channels = value
+
+
+def calculate_rms(audio_data) -> float:
+    """Calculate Root Mean Square (RMS) power of audio samples or WAV bytes."""
+    if audio_data is None:
+        return 0.0
+    try:
+        if isinstance(audio_data, bytes):
+            if len(audio_data) <= 44:
+                return 0.0
+            import numpy as np
+            payload = audio_data[44:] if audio_data[:4] == b"RIFF" and audio_data[8:12] == b"WAVE" else audio_data
+            samples = np.frombuffer(payload, dtype=np.int16)
+            if len(samples) == 0:
+                return 0.0
+            float_samples = samples.astype(np.float32) / 32768.0
+            return float(np.sqrt(np.mean(np.square(float_samples))))
+        elif hasattr(audio_data, 'dtype'):
+            import numpy as np
+            if len(audio_data) == 0:
+                return 0.0
+            return float(np.sqrt(np.mean(np.square(audio_data.astype(np.float32)))))
+    except Exception:
+        return 0.0
+    return 0.0

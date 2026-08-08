@@ -48,6 +48,21 @@ class TranscriptionFactory:
 
         Supports Groq, OpenAI, Google, Deepgram, and local servers (Ollama/localhost via base_url).
         """
+        provider = str(config.transcription.provider or "").lower()
+        if provider in {"local_whisper", "whisper_local", "whisper"}:
+            try:
+                from core.implementations.transcription.local_transcribers import LocalWhisperTranscriber
+                return LocalWhisperTranscriber(config.transcription)
+            except Exception as e:
+                print(f"[TranscriptionFactory] LocalWhisperTranscriber unavailable ({e}), falling back to LiteLLMTranscriber")
+                return LiteLLMTranscriber(config.transcription)
+        if provider in {"parakeet", "local_parakeet"}:
+            try:
+                from core.implementations.transcription.local_transcribers import ParakeetTranscriber
+                return ParakeetTranscriber(config.transcription)
+            except Exception as e:
+                print(f"[TranscriptionFactory] ParakeetTranscriber unavailable ({e}), falling back to LiteLLMTranscriber")
+                return LiteLLMTranscriber(config.transcription)
         return LiteLLMTranscriber(config.transcription)
 
     @staticmethod
@@ -150,6 +165,7 @@ class TranscriptionFactory:
     def create_orchestrator(
         config: Config,
         audio_input=None,
+        enable_audio_input: bool = True,
         transcriber=None,
         llm_processor=None,
         output_handlers=None,
@@ -172,7 +188,7 @@ class TranscriptionFactory:
             Configured TranscriptionOrchestrator instance
         """
         # Create components if not provided
-        if audio_input is None:
+        if audio_input is None and enable_audio_input:
             audio_input = TranscriptionFactory.create_audio_input(config)
         
         if transcriber is None:

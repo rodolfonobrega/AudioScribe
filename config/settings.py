@@ -36,6 +36,10 @@ class TranscriptionConfig:
     base_url: Optional[str] = None
     language: str = "auto"
     temperature: float = 0.0
+    device: str = "auto"
+    compute_type: str = "auto"
+    model_path: Optional[str] = None
+
 
     @property
     def model_chain(self) -> List[str]:
@@ -56,7 +60,7 @@ class LLMConfig:
     temperature: float = 0.7
     max_tokens: int = 1000
     system_prompt: Optional[str] = None
-    enabled: bool = True
+    enabled: bool = False
 
     @property
     def model_chain(self) -> List[str]:
@@ -78,7 +82,7 @@ class OutputConfig:
 class KeyboardConfig:
     """Keyboard listener configuration."""
     enabled: bool = True
-    hotkey: str = "f9"
+    hotkey: str = "ctrl+win"
     mode: str = "push_to_talk"
     verbose: bool = True
 
@@ -205,6 +209,9 @@ def load_config(path: Optional[str] = None, use_env: bool = False, **kwargs) -> 
             or os.getenv('LITELLM_API_KEY')
         )
         config.transcription.base_url = os.getenv('TRANSCRIPTION_BASE_URL') or config.transcription.base_url
+        config.transcription.model_path = os.getenv('TRANSCRIPTION_MODEL_PATH') or config.transcription.model_path
+        config.transcription.device = os.getenv('TRANSCRIPTION_DEVICE', config.transcription.device)
+        config.transcription.compute_type = os.getenv('TRANSCRIPTION_COMPUTE_TYPE', config.transcription.compute_type)
         config.transcription.language = os.getenv('TRANSCRIPTION_LANGUAGE', config.transcription.language)
 
         # LLM settings

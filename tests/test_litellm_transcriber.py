@@ -47,3 +47,21 @@ def test_litellm_transcriber_mock_transcribe():
 
         res = transcriber._try_transcribe("groq/whisper-large-v3-turbo", "dummy.wav")
         assert res == "Hello world transcription"
+
+
+@pytest.mark.unit
+def test_litellm_transcriber_sends_dictionary_as_whisper_prompt():
+    config = TranscriptionConfig(model="groq/whisper-large-v3-turbo", api_key="gsk_test123")
+    transcriber = LiteLLMTranscriber(config)
+
+    with patch.object(transcriber, "litellm") as mock_litellm, patch("builtins.open", MagicMock()):
+        mock_litellm.transcription.return_value = {"text": "AudioScribe"}
+
+        result = transcriber._try_transcribe(
+            "groq/whisper-large-v3-turbo",
+            "dummy.wav",
+            prompt="Vocabulary terms: AudioScribe, OpenAI",
+        )
+
+    assert result == "AudioScribe"
+    assert mock_litellm.transcription.call_args.kwargs["prompt"] == "Vocabulary terms: AudioScribe, OpenAI"

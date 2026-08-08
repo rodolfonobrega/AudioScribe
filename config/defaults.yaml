@@ -13,23 +13,35 @@ audio:
 
 # Transcription Service Configuration
 transcription:
-  provider: litellm        # Provider: litellm (unified API for all providers)
-  model: groq/whisper-large-v3-turbo  # Model name (e.g., groq/whisper-large-v3, openai/whisper-1)
+  provider: litellm        # Groq first; other compatible providers remain optional
+  model: groq/whisper-large-v3-turbo
   fallback_models:
-    - groq/whisper-large-v3     # Fallback models (tried in order if primary fails)
+    - groq/whisper-large-v3
   max_retries: 2           # Number of retries with exponential backoff before fallback
   retry_delay: 1.0         # Base delay for exponential backoff (in seconds)
-  api_key: ${GROQ_API_KEY}  # API key (use environment variable)
+  api_key: ${GROQ_API_KEY}
   base_url: null           # Custom base URL (optional)
   language: auto           # Language code (auto=auto-detect)
   temperature: 0.0         # Sampling temperature (0.0=deterministic)
 
 # LLM Processor Configuration
 llm:
-  enabled: true            # Enable/disable LLM post-processing
+  enabled: false            # Raw transcription is the default; enable explicitly when wanted
   provider: litellm        # Provider: litellm, openai, anthropic, etc.
   model: groq/openai/gpt-oss-120b  # Groq production model
   fallback_models: []
+  max_retries: 2           # Number of retries with exponential backoff before fallback
+  retry_delay: 1.0         # Base delay for exponential backoff (in seconds)
+  api_key: ${GROQ_API_KEY} # API key (use environment variable)
+  temperature: 0.7         # Sampling temperature
+  max_tokens: 1000         # Maximum tokens to generate
+  system_prompt: |
+    You are a transcription correction assistant. Your task is to:
+    1. Analyze the full context of transcribed text
+    2. Fix transcription errors by understanding context (words that sound similar but have different meanings)
+    3. Correct grammar, spelling, and punctuation
+    4. Maintain the ORIGINAL language - do NOT translate
+    5. Return ONLY the corrected text, no explanations
   max_retries: 2           # Number of retries with exponential backoff before fallback
   retry_delay: 1.0         # Base delay for exponential backoff (in seconds)
   api_key: ${GROQ_API_KEY} # API key (use environment variable)
@@ -52,9 +64,6 @@ llm:
 output:
   handlers:
     - pyautogui               # Output handlers: stdout, clipboard, file, autoit, pyautogui, applescript, xdotool
-    # - pyautogui          # Cross-platform, fast typing (recommended)
-    # - clipboard
-    # - file
   file_path: transcripts.txt  # File path for file handler
   file_mode: a              # File mode: a=append, w=overwrite
   verbose: true             # Enable verbose output
@@ -62,7 +71,7 @@ output:
 # Keyboard Listener Configuration
 keyboard:
   enabled: true             # Enable keyboard listener
-  hotkey: f9                # Hotkey combination (e.g., f9, ctrl+space, ctrl+shift+t)
+  hotkey: ctrl+win          # Hotkey combination (e.g., ctrl+win, f9, ctrl+space)
   mode: push_to_talk        # Interaction mode: push_to_talk, toggle
   verbose: true             # Enable verbose output
 

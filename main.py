@@ -3,14 +3,29 @@ AudioScribe - Cross-platform Audio Transcription Tool
 """
 
 import argparse
+import json
+import os
 import sys
 import time
 from typing import Optional
+
+# LiteLLM otherwise tries to refresh its large model-cost map from the
+# internet while importing the engine. The desktop sidecar must start
+# offline and expose IPC immediately; the bundled local map is sufficient for
+# transcription and usage metadata, and callers can still override this env.
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 from config.settings import load_config
 from core.factory import TranscriptionFactory
 from core.ui import TerminalUI
 from core.utils.preflight import PreflightChecker
+from core.onboarding import run_onboarding_if_needed, reset_onboarding
 
 # Load environment variables from .env file
 try:
@@ -39,9 +54,20 @@ def main():
     parser.add_argument('--mode', type=str, choices=['push_to_talk', 'toggle', 'vad'], help='Interaction mode')
     parser.add_argument('--min-rms', type=float, help='Minimum RMS threshold to filter background silence')
     parser.add_argument('--server', action='store_true', help='Start IPC API server for Electron Desktop GUI')
-    parser.add_argument('--port', type=int, default=8765, help='IPC API server port (default: 8765)')
+    parser.add_argument('--port', type=int, default=0, help=argparse.SUPPRESS)
+    parser.add_argument('--session-token-stdin', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--no-onboarding', action='store_true', help='Skip first-run onboarding wizard')
+    parser.add_argument('--reset-onboarding', action='store_true', help='Reset onboarding and re-run setup')
     
     args = parser.parse_args()
+
+    session_token = None
+    if args.server:
+        if not args.session_token_stdin:
+            parser.error("--server is reserved for the authenticated desktop sidecar")
+        session_token = sys.stdin.buffer.readline(512).decode("utf-8", errors="strict").strip()
+        if len(session_token) < 32:
+            parser.error("desktop sidecar session token is invalid")
     
     # Create UI
     # The Electron sidecar must not write terminal status lines. Apart from
@@ -94,22 +120,43 @@ def main():
 
     if not config:
         print("Warning: No configuration loaded. Using defaults.")
-    
+
+    # Reset onboarding if requested
+    if args.reset_onboarding:
+        reset_onboarding()
+        print("Onboarding reset. Execute novamente para refazer a configuração.")
+
+    # FIRST-RUN ONBOARDING WIZARD
+    onboarding_ok = run_onboarding_if_needed(config=config, cli_args=args)
+    if not onboarding_ok:
+        print("⚠️  Onboarding não concluído. Corrija os problemas acima e execute novamente.")
+        print("   Use --no-onboarding para pular esta verificação.")
+        sys.exit(1)
+
     # PRE-FLIGHT DIAGNOSTIC CHECK
     preflight = PreflightChecker(config=config)
-    is_ready = preflight.check_all()
-    preflight.print_report()
+    # The desktop UI owns diagnostics in IPC mode. Running the full hardware,
+    # permissions and update sweep before opening the socket can block startup
+    # on PortAudio or a network timeout and leave Electron showing "Checking".
+    is_ready = True if args.server else preflight.check_all()
+    if not args.server:
+        preflight.print_report()
 
     if args.preflight_only:
         sys.exit(0 if is_ready else 1)
 
-    if not is_ready and not args.server:
+    if not is_ready and not args.server and not args.no_onboarding:
         print("❌ PRE-FLIGHT FAILED: Resolva os erros acima antes de continuar.")
+        print("   Use --no-onboarding para ignorar esta verificação.")
         sys.exit(1)
 
     # Create orchestrator using factory
     try:
-        orchestrator = TranscriptionFactory.create_orchestrator(config, ui=ui)
+        orchestrator = TranscriptionFactory.create_orchestrator(
+            config,
+            ui=ui,
+            enable_audio_input=not args.server,
+        )
     except Exception as e:
         ui.update_status(f"Error creating components: {e}")
         import traceback
@@ -117,12 +164,13 @@ def main():
         return
 
     # Show config with audio device info
-    if config.orchestrator.verbose:
+    if config.orchestrator.verbose and not args.server:
         ui.show_compact_config(config, args, orchestrator.audio_input)
     
     # FAIL-FAST: Validate components in CLI mode. IPC mode exposes this
     # diagnostic through the server so the UI can configure first.
-    print("Validating components...")
+    if not args.server:
+        print("Validating components...")
     try:
         if not args.server and orchestrator.audio_input:
             print(" - Checking Audio Input...", end=" ", flush=True)
@@ -162,9 +210,13 @@ def main():
 
         if args.server:
             from core.api.server import AudioScribeServer
-            api_server = AudioScribeServer(orchestrator=orchestrator, port=args.port)
+            api_server = AudioScribeServer(orchestrator=orchestrator, port=args.port, session_token=session_token)
             api_server.run_in_thread()
-            print(f"AudioScribe IPC server started on 127.0.0.1:{args.port} for Electron GUI")
+            if not api_server.wait_until_ready():
+                raise RuntimeError("Authenticated desktop IPC server did not start in time")
+            # This is the only stdout line consumed by Electron. All diagnostic
+            # output stays on stderr or is disabled in --server mode.
+            print(json.dumps({"event": "desktop_ipc_ready", "port": api_server.bound_port, "protocol_version": api_server.PROTOCOL_VERSION}), flush=True)
 
         if args.file:
             orchestrator.process_file(args.file)

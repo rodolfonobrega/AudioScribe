@@ -22,6 +22,14 @@ class AbstractTranscriber(ABC):
             Transcribed text, or None if transcription failed
         """
         pass
+
+    def transcribe_with_vocabulary(self, audio_data: bytes, vocabulary: list[str]) -> Optional[str]:
+        """Transcribe with optional vocabulary hints when the backend supports it.
+
+        Implementations that do not support hints retain the normal
+        transcription behaviour instead of silently changing the request.
+        """
+        return self.transcribe(audio_data)
     
     @property
     @abstractmethod
@@ -30,7 +38,6 @@ class AbstractTranscriber(ABC):
         pass
     
     # Additional method for compatibility
-    @abstractmethod
     def transcribe_file(self, file_path: str) -> Optional[str]:
         """
         Transcribe audio file.
@@ -41,7 +48,11 @@ class AbstractTranscriber(ABC):
         Returns:
             Transcribed text, or None if transcription failed
         """
-        pass
+        try:
+            with open(file_path, "rb") as f:
+                return self.transcribe(f.read())
+        except Exception:
+            return None
 
     def health_check(self) -> None:
         """

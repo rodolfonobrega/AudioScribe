@@ -1,61 +1,57 @@
-# AudioScribe v1.0 - Atualizações
+# AudioScribe Usage Guide
 
-## O que foi corrigido:
+## Key Updates & Improvements
 
-1. **Saída limpa e organizada**
-   - Removida saída detalhada poluda com "=" e "======================================================"
-   - Adicionada saída compacta e limpa no estilo solicitado
-   - Removidos nomes de componentes da saída (GroqTranscriber, LiteLLMProcessor, etc.)
+1. **Clean & Concise Terminal Output**
+   - Streamlined output header removing noisy log dividers
+   - Compact status layout displaying active transcription provider and engine settings
+   - Output handler details clearly indicated without internal class names
 
-2. **LLM desligado por padrão**
-   - `config/defaults.yaml`: `enabled: false`
-   - Adicionado argumento `--no-llm` para desativar via CLI
-   - LLM só é ativado se `enabled: true` no config E não passar `--no-llm`
+2. **LLM Control Flags**
+   - Configurable in `config/defaults.yaml` via `llm.enabled`
+   - Dedicated CLI flag `--no-llm` to temporarily bypass LLM post-processing
 
-3. **Nome do dispositivo**
-   - Mostra "Device Default" quando não especifica `--device`
-   - Mostra "Device X (Nome do dispositivo)" quando especifica `--device X`
+3. **Audio Device Selection**
+   - Displays "Device Default" when `--device` is omitted
+   - Displays "Device X (Device Name)" when explicitly passing `--device X`
 
-4. **Arquivos de teste removidos**
-   - Todos os arquivos `test_*.py` foram apagados
+## How to Use
 
-## Como usar:
-
-### Uso básico (LLM desligado, output console)
+### Basic Usage (Console Output)
 ```bash
 python main.py --no-keyboard
 ```
 
-### Com LLM ativado
-Edite `config/defaults.yaml` e mude `enabled: false` para `enabled: true`:
+### With LLM Post-Processing Enabled
+Edit `config/defaults.yaml` and set `enabled: true`:
 ```yaml
 llm:
   enabled: true
 ```
 
-Depois execute:
+Then run:
 ```bash
 python main.py
 ```
 
-### Com diferentes outputs
+### Output Handlers
 ```bash
 python main.py --output clipboard
 python main.py --output autoit
 python main.py --output pyautogui
 ```
 
-### Com dispositivo específico
+### Specific Input Device
 ```bash
 python main.py --device 1
 ```
 
-### Desativar LLM via CLI (mantém config com enabled=true)
+### Disable LLM via CLI
 ```bash
 python main.py --no-llm
 ```
 
-## Saída esperada:
+## Expected Startup Output
 
 ```
 AudioScribe v1.0
@@ -68,19 +64,20 @@ Runtime      : LLM=off | Output=console
 Hotkey: f9 | Ctrl+C to exit
 ```
 
-## Argumentos disponíveis:
+## Command-Line Arguments
 
-- `--config PATH` - Caminho para arquivo de configuração
-- `--output TYPE` - Tipo de saída (console, clipboard, pyautogui, autoit, applescript, xdotool)
-- `--device INDEX` - Índice do dispositivo de áudio
-- `--no-keyboard` - Desativar listener de teclado
-- `--file PATH` - Processar arquivo de áudio em vez de gravar
-- `--text TEXT` - Processar texto diretamente (para pós-processamento LLM)
-- `--no-llm` - Desativar pós-processamento LLM
-- `--help` - Mostrar ajuda
+- `--config PATH` - Path to custom configuration YAML file
+- `--output TYPE` - Output target (`console`, `clipboard`, `pyautogui`, `autoit`, `applescript`, `xdotool`)
+- `--device INDEX` - Audio input device index
+- `--no-keyboard` - Disable global hotkey listener
+- `--file PATH` - Process existing audio file instead of live recording
+- `--text TEXT` - Process text string directly through LLM post-processor
+- `--no-llm` - Bypass LLM post-processing
+- `--help` - Show help message
 
-## Hotkey padrão:
-- Pressione F9 para gravar (push-to-talk)
-- Ctrl+C para sair
+## Default Hotkeys
+- Press **F9** to toggle recording
+- **Ctrl+C** to exit
 
-Nota: O modo e hotkey podem ser configurados em `config/defaults.yaml`
+*Note: Hotkeys and dictation modes can be customized in `config/defaults.yaml`.*
+

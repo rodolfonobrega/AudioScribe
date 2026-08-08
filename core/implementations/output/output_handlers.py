@@ -10,6 +10,7 @@ import platform
 from typing import List, Optional
 
 from core.interfaces.output_handler import AbstractOutputHandler
+from core.utils.preflight import safe_print
 
 
 class ConsoleOutputHandler(AbstractOutputHandler):
@@ -129,16 +130,12 @@ class PyAutoGUIOutputHandler(AbstractOutputHandler):
     
     def output(self, text: str, **kwargs) -> None:
         """Type text using PyAutoGUI via clipboard (supports Unicode)."""
+        if not text or not text.strip():
+            return
         try:
-            # Save original clipboard content
-            original_clipboard = None
-            try:
-                original_clipboard = self.pyperclip.paste()
-            except Exception:
-                pass
-            
             # Copy to clipboard
-            self.pyperclip.copy(text)
+            if self.pyperclip is not None:
+                self.pyperclip.copy(text)
             
             import time
             time.sleep(0.05)
@@ -148,15 +145,6 @@ class PyAutoGUIOutputHandler(AbstractOutputHandler):
                 self.pyautogui.hotkey('command', 'v')
             else:
                 self.pyautogui.hotkey('ctrl', 'v')
-            
-            time.sleep(0.05)
-            
-            # Restore original clipboard content
-            if original_clipboard is not None:
-                try:
-                    self.pyperclip.copy(original_clipboard)
-                except Exception:
-                    pass
         except Exception as e:
             print(f"PyAutoGUI error: {e}")
     
@@ -256,7 +244,7 @@ class AppleScriptOutputHandler(AbstractOutputHandler):
             subprocess.run(["osascript", "-e", script], check=True)
         except subprocess.CalledProcessError as e:
             print(f"AppleScript execution error: {e}")
-            print("💡 DICA (macOS): Verifique se o Terminal tem permissão em 'Ajustes do Sistema > Privacidade e Segurança > Acessibilidade'.")
+            safe_print("TIP: DICA (macOS): Verifique se o Terminal tem permissao em 'Ajustes do Sistema > Privacidade e Seguranca > Acessibilidade'.")
         except Exception as e:
             print(f"AppleScript error: {e}")
     

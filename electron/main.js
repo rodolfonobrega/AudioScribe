@@ -1,8 +1,18 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, safeStorage } = require('electron');
 const path = require('path');
 const net = require('net');
+const crypto = require('crypto');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const { registerProfileShortcuts: attemptProfileShortcutRegistration } = require('./src/profile_shortcuts');
+
+// E2E tests launch the real Electron shell but deliberately replace operating
+// system integration and the Python sidecar with deterministic fakes. This
+// keeps UI tests hermetic: no microphone prompt, global shortcut, API key, or
+// user configuration is touched.
+const IS_E2E = process.env.AUDIOSCRIBE_E2E === '1';
+const IS_PHYSICAL_HOTKEY_E2E = process.env.AUDIOSCRIBE_E2E_PHYSICAL_HOTKEY === '1';
 
 let mainWindow = null;
 let overlayWindow = null;
@@ -10,10 +20,87 @@ let tray = null;
 let pythonProcess = null;
 let socketClient = null;
 let socketBuffer = '';
+let sidecarStdoutBuffer = '';
+let engineSession = null;
+let enginePort = null;
+let engineRequestSequence = 0;
+let engineInboundSequence = 0;
+let engineReady = false;
 const pendingRequests = new Map();
 let reconnectTimer = null;
 let isRecording = false;
 let lastEngineEvent = { event: 'engine_starting', data: { code: 'engine_starting' } };
+let nativeHotkeys = null;
+let pendingRendererStart = null;
+let rendererStartSequence = 0;
+let pushToTalkSafetyTimer = null;
+let activeProfiles = [];
+let shortcutCaptureActive = false;
+const validatedProfileProcessors = new Set();
+// Default to F9. The native JS hook also supports modifier-only chords such as Ctrl+Win.
+let currentShortcut = 'F9';
+// Activation mode: 'toggle' (tap once to start, tap again to stop) or 'push_to_talk' (hold)
+let activationMode = 'toggle';
+
+function stableJson(value) {
+    if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+    if (value && typeof value === 'object') {
+        return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+}
+
+function requestSignature(message) {
+    const material = [
+        'request',
+        String(message.protocol_version),
+        String(message.sequence),
+        String(message.id || ''),
+        String(message.command || ''),
+        stableJson(message.params || {}),
+    ].join(':');
+    return crypto.createHmac('sha256', engineSession).update(material, 'utf8').digest('hex');
+}
+
+function verifyEngineMessage(message, direction) {
+    if (!engineSession || message?.protocol_version !== 3 || !Number.isInteger(message.sequence) || message.sequence <= engineInboundSequence) return false;
+    const auth = message.auth;
+    if (typeof auth !== 'string' || typeof message.payload !== 'string') return false;
+    const material = `${direction}:${message.protocol_version}:${message.sequence}:${message.payload}`;
+    const expected = crypto.createHmac('sha256', engineSession).update(material, 'utf8').digest('hex');
+    if (auth.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return false;
+    engineInboundSequence = message.sequence;
+    return true;
+}
+
+function getOverlayShortcut() {
+    const sc = currentShortcut || 'F9';
+    return String(sc).replace(/Control/g, 'Ctrl').replace(/Super/g, 'Win').replace(/windows/gi, 'Win').replace(/\s*\+\s*/g, ' + ');
+}
+
+function configureNativeHotkey() {
+    try {
+        // The native hook owns the main shortcut in both modes. Electron's
+        // globalShortcut rejects modifier-only chords such as Control+Super,
+        // while uIOhook can observe the Windows key and its key-up edge.
+        if (!nativeHotkeys) nativeHotkeys = require('./src/native_hotkeys');
+        const defaultProfile = activeProfiles.find((profile) => profile?.isDefault && profile.enabled) || null;
+        return nativeHotkeys.configure(currentShortcut, {
+            onPress: () => {
+                if (shortcutCaptureActive) return;
+                if (activationMode === 'push_to_talk') startRecording(defaultProfile);
+                else toggleRecording(defaultProfile);
+            },
+            onRelease: () => {
+                if (shortcutCaptureActive) return;
+                if (activationMode === 'push_to_talk') stopRecording(defaultProfile);
+            },
+        });
+    } catch (error) {
+        console.error('[Electron] Native hotkey hook unavailable:', error);
+        return { status: 'error', code: 'native_hotkey_unavailable', error: error.message };
+    }
+}
 
 function assetPath(name) {
     return app.isPackaged
@@ -30,26 +117,106 @@ function providerConfigPath() {
     return path.join(app.getPath('userData'), 'provider-config.json.enc');
 }
 
+function secureStorageAvailable() {
+    if (!safeStorage.isEncryptionAvailable()) return false;
+    // Linux can report encryption available while using Electron's basic_text
+    // backend. Provider credentials must never silently fall back to plaintext.
+    return typeof safeStorage.getSelectedStorageBackend !== 'function'
+        || safeStorage.getSelectedStorageBackend() !== 'basic_text';
+}
+
 function loadProviderConfig() {
     try {
-        const encrypted = require('fs').readFileSync(providerConfigPath(), 'utf8');
-        if (safeStorage.isEncryptionAvailable()) {
-            return JSON.parse(safeStorage.decryptString(Buffer.from(encrypted, 'base64')));
-        }
-        return JSON.parse(encrypted);
+        if (!secureStorageAvailable()) return null;
+        const encrypted = fs.readFileSync(providerConfigPath(), 'utf8');
+        return JSON.parse(safeStorage.decryptString(Buffer.from(encrypted, 'base64')));
     } catch (error) {
         return null;
     }
 }
 
 function saveProviderConfig(config) {
-    const fs = require('fs');
+    if (!secureStorageAvailable()) {
+        throw new Error('Secure system credential storage is unavailable. Configure a supported keychain before saving provider credentials.');
+    }
     fs.mkdirSync(path.dirname(providerConfigPath()), { recursive: true });
     const serialized = JSON.stringify(config);
-    const value = safeStorage.isEncryptionAvailable()
-        ? safeStorage.encryptString(serialized).toString('base64')
-        : serialized;
+    const value = safeStorage.encryptString(serialized).toString('base64');
     fs.writeFileSync(providerConfigPath(), value, { encoding: 'utf8', mode: 0o600 });
+}
+
+function profilePrompt(profile) {
+    return String(profile?.prompt || '').trim();
+}
+
+function llmValidationRequest(config) {
+    const llm = config?.llm;
+    if (!llm?.enabled) {
+        return {
+            status: 'error',
+            code: 'profile_llm_not_configured',
+            error: 'This profile requires post-processing, but no post-processing model is enabled in Settings.',
+        };
+    }
+    if (!String(llm.provider || '').trim() || !String(llm.model || '').trim()) {
+        return {
+            status: 'error',
+            code: 'profile_llm_not_configured',
+            error: 'This profile requires a configured post-processing provider and model.',
+        };
+    }
+    const params = {
+        type: 'llm',
+        provider: String(llm.provider).trim(),
+        model: String(llm.model).trim(),
+        api_key: llm.api_key || 'configured',
+        base_url: llm.base_url || '',
+        allow_local: String(llm.provider).trim().toLowerCase() === 'ollama',
+    };
+    // Do not retain or log credentials. The fingerprint exists only for this
+    // process so a validated configuration is not charged on every hotkey.
+    const fingerprint = crypto.createHash('sha256').update(stableJson({
+        provider: params.provider,
+        model: params.model,
+        api_key: params.api_key,
+        base_url: params.base_url,
+    })).digest('hex');
+    return { status: 'ok', params, fingerprint };
+}
+
+async function ensureProfileProcessingReady(profile) {
+    if (!profilePrompt(profile)) return { status: 'ok' };
+    const request = llmValidationRequest(loadProviderConfig());
+    if (request.status !== 'ok') return request;
+    if (validatedProfileProcessors.has(request.fingerprint)) return { status: 'ok' };
+
+    const result = await sendEngineRequest('test_connection', request.params, 15000);
+    if (result?.status === 'ok') {
+        validatedProfileProcessors.add(request.fingerprint);
+        return { status: 'ok' };
+    }
+    return {
+        status: 'error',
+        code: 'profile_llm_unavailable',
+        error: result?.error || 'The post-processing model could not complete its validation request.',
+    };
+}
+
+function hardenRenderer(webContents) {
+    webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    webContents.on('will-navigate', (event) => event.preventDefault());
+    webContents.on('will-attach-webview', (event) => event.preventDefault());
+    webContents.session.setPermissionRequestHandler((contents, permission, callback) => {
+        callback(permission === 'media' && contents.getURL().startsWith('file://'));
+    });
+}
+
+function trustedMainSender(event) {
+    return Boolean(mainWindow && !mainWindow.isDestroyed() && event?.sender === mainWindow.webContents);
+}
+
+function untrustedSenderResult(event) {
+    return trustedMainSender(event) ? null : { status: 'error', code: 'untrusted_renderer', error: 'Request rejected from an untrusted renderer.' };
 }
 
 function createOverlayWindow() {
@@ -72,10 +239,12 @@ function createOverlayWindow() {
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
-            contextIsolation: true
+            contextIsolation: true,
+            sandbox: true,
         }
     });
 
+    hardenRenderer(overlayWindow.webContents);
     overlayWindow.loadFile(path.join(__dirname, 'ui', 'overlay.html'));
 }
 
@@ -107,19 +276,21 @@ function setupAutoUpdater() {
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
-        width: 1180,
-        height: 820,
-        minWidth: 900,
-        minHeight: 650,
+        width: 1400,
+        height: 920,
+        minWidth: 760,
+        minHeight: 600,
         show: false,
         title: "AudioScribe Desktop",
         webPreferences: {
-            preload: path.join(__dirname, 'preload.js'),
+            preload: path.join(__dirname, IS_E2E ? 'preload_e2e.js' : 'preload.js'),
             nodeIntegration: false,
-            contextIsolation: true
+            contextIsolation: true,
+            sandbox: true,
         }
     });
 
+    hardenRenderer(mainWindow.webContents);
     mainWindow.loadFile(path.join(__dirname, 'ui', 'index.html'));
 
     mainWindow.once('ready-to-show', () => {
@@ -163,7 +334,7 @@ function createTray() {
     const contextMenu = Menu.buildFromTemplate([
         { label: 'AudioScribe Active', enabled: false },
         { type: 'separator' },
-        { label: 'Toggle Recording (F9)', click: () => toggleRecording() },
+        { label: 'Toggle Recording (Ctrl + Win)', click: () => toggleRecording() },
         { label: 'Open Settings', click: () => mainWindow.show() },
         { type: 'separator' },
         { label: 'Quit', click: () => {
@@ -172,7 +343,7 @@ function createTray() {
         }}
     ]);
 
-    tray.setToolTip('AudioScribe - Press F9 to Record');
+    tray.setToolTip('AudioScribe - Press Ctrl + Win to Record');
     tray.setContextMenu(contextMenu);
 
     tray.on('double-click', () => {
@@ -180,14 +351,40 @@ function createTray() {
     });
 }
 
-function connectToPythonServer() {
+function createApplicationMenu() {
+    const menu = Menu.buildFromTemplate([
+        {
+            label: 'File',
+            submenu: [
+                {
+                    label: 'Exit',
+                    accelerator: process.platform === 'darwin' ? 'Command+Q' : 'Alt+F4',
+                    click: () => {
+                        app.isQuitting = true;
+                        app.quit();
+                    },
+                },
+            ],
+        },
+        ...(!app.isPackaged ? [{
+            label: 'View',
+            submenu: [{ role: 'reload' }, { role: 'toggledevtools' }],
+        }] : []),
+    ]);
+    Menu.setApplicationMenu(menu);
+}
+
+function connectToPythonServer(port = enginePort) {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return;
     if (socketClient && !socketClient.destroyed) return;
     socketBuffer = '';
-    socketClient = net.connect({ port: 8765, host: '127.0.0.1' }, () => {
+    socketClient = net.connect({ port, host: '127.0.0.1' }, () => {
         console.log('[Electron] Connected to AudioScribe Python Server.');
         publishEngineEvent('engine_status', { code: 'engine_connected', message: 'Engine connected' });
         sendStoredProviderConfig().then((result) => {
             if (result?.status === 'ok') {
+                engineReady = true;
+                registerAllShortcuts();
                 publishEngineEvent('engine_ready', { code: 'engine_ready', message: 'Engine ready for commands' });
             } else {
                 publishEngineEvent('engine_error', {
@@ -208,7 +405,14 @@ function connectToPythonServer() {
         for (const line of lines) {
             if (!line.trim()) continue;
             try {
-                const eventData = JSON.parse(line.trim());
+                const envelope = JSON.parse(line.trim());
+                const eventData = JSON.parse(envelope.payload);
+                const direction = eventData.event ? 'event' : 'response';
+                if (!verifyEngineMessage(envelope, direction)) {
+                    console.error('[Electron] Rejected unauthenticated engine message.');
+                    socketClient?.destroy();
+                    return;
+                }
                 if (eventData.id && pendingRequests.has(eventData.id)) {
                     const request = pendingRequests.get(eventData.id);
                     pendingRequests.delete(eventData.id);
@@ -216,27 +420,42 @@ function connectToPythonServer() {
                     request.resolve(eventData);
                     continue;
                 }
+
                 if (mainWindow) {
-                    mainWindow.webContents.send('engine-event', eventData);
+                    mainWindow.webContents.send('engine-event', { event: eventData.event, data: eventData.data });
                 }
 
-                // Update floating overlay
+                // Update the overlay based on engine state. MediaRecorder itself is
+                // started/stopped only by the Electron recording functions above.
                 if (overlayWindow) {
                     if (eventData.event === 'status_changed') {
-                        const status = eventData.data.status;
+                        const status = eventData.data?.status;
                         if (status === 'recording') {
                             overlayWindow.showInactive();
-                            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1 });
+                            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1, shortcut: getOverlayShortcut() });
                         } else if (status === 'processing') {
-                            overlayWindow.webContents.send('update-overlay-state', { status: 'processing' });
+                            overlayWindow.webContents.send('update-overlay-state', { status: 'processing', shortcut: getOverlayShortcut() });
+                        } else if (status === 'ready') {
+                            overlayWindow.webContents.send('update-overlay-state', { status: 'ready', shortcut: getOverlayShortcut() });
                         }
                     } else if (eventData.event === 'transcription_result') {
-                        const text = eventData.data.text;
-                        overlayWindow.webContents.send('update-overlay-state', { status: 'done', text: text });
+                        const text = eventData.data?.text || '';
+                        overlayWindow.webContents.send('update-overlay-state', {
+                            status: 'done',
+                            text: eventData.data?.is_error ? (eventData.data.error || 'Transcription failed.') : text,
+                            isError: Boolean(eventData.data?.is_error),
+                            isSilent: Boolean(eventData.data?.is_silent),
+                            shortcut: getOverlayShortcut(),
+                        });
                         
-                        // Auto-paste text into the user's currently focused window
-                        const NativeOutputHandler = require('./src/output');
-                        NativeOutputHandler.copyAndPaste(text);
+                        if (text && text.trim()) {
+                            const NativeOutputHandler = require('./src/output');
+                            NativeOutputHandler.copyAndPaste(text).then((result) => {
+                                if (result?.status === 'copied' && result?.error) {
+                                    console.warn('[AudioScribe] Automatic paste failed; text remains in clipboard:', result.error);
+                                }
+                            });
+                        }
 
                         setTimeout(() => {
                             overlayWindow.hide();
@@ -254,6 +473,7 @@ function connectToPythonServer() {
     });
 
     socketClient.on('close', () => {
+        engineReady = false;
         publishEngineEvent('engine_error', {
             code: 'engine_offline',
             title: 'Engine disconnected',
@@ -269,7 +489,7 @@ function connectToPythonServer() {
         if (!reconnectTimer) {
             reconnectTimer = setTimeout(() => {
                 reconnectTimer = null;
-                connectToPythonServer();
+                connectToPythonServer(enginePort);
             }, 2000);
         }
     });
@@ -277,7 +497,7 @@ function connectToPythonServer() {
 
 function sendEngineRequest(command, params = {}, timeoutMs = 10000) {
     return new Promise((resolve) => {
-        if (!socketClient || socketClient.destroyed) {
+        if (!engineSession || !socketClient || socketClient.destroyed) {
             resolve({ status: 'error', code: 'engine_offline', error: 'Python engine offline' });
             return;
         }
@@ -287,7 +507,15 @@ function sendEngineRequest(command, params = {}, timeoutMs = 10000) {
             resolve({ status: 'error', code: 'engine_timeout', error: `Engine timeout for ${command}` });
         }, timeoutMs);
         pendingRequests.set(id, { resolve, timer });
-        socketClient.write(JSON.stringify({ id, command, params }) + '\n');
+        const request = {
+        protocol_version: 3,
+            id,
+            sequence: ++engineRequestSequence,
+            command,
+            params,
+        };
+        request.auth = requestSignature(request);
+        socketClient.write(JSON.stringify(request) + '\n');
     });
 }
 
@@ -304,8 +532,8 @@ function launchPythonSidecar() {
     if (app.isPackaged) {
         const binName = process.platform === 'win32' ? 'audioscribe_engine.exe' : 'audioscribe_engine';
         executable = path.join(process.resourcesPath, 'bin', binName);
-        args = ['--server', '--port', '8765'];
-        if (!require('fs').existsSync(executable)) {
+        args = ['--server', '--port', '0', '--session-token-stdin'];
+        if (!fs.existsSync(executable)) {
             console.error('[Electron] Packaged engine binary is missing. Desktop app will remain offline.');
             publishEngineEvent('engine_error', {
                 code: 'engine_binary_missing',
@@ -318,11 +546,22 @@ function launchPythonSidecar() {
     } else {
         executable = process.platform === 'win32' ? 'python' : 'python3';
         const scriptPath = path.join(__dirname, '..', 'main.py');
-        args = [scriptPath, '--server', '--port', '8765'];
+        args = [scriptPath, '--server', '--port', '0', '--session-token-stdin'];
     }
 
     try {
-        pythonProcess = spawn(executable, args, { cwd: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..') });
+        engineSession = crypto.randomBytes(32).toString('base64url');
+        engineReady = false;
+        enginePort = null;
+        engineRequestSequence = 0;
+        engineInboundSequence = 0;
+        sidecarStdoutBuffer = '';
+        pythonProcess = spawn(executable, args, {
+            cwd: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'),
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        pythonProcess.stdin.write(`${engineSession}\n`);
+        pythonProcess.stdin.end();
         pythonProcess.on('error', (err) => {
             console.error('[Electron] Python engine failed to start:', err.message);
             const missingPython = err.code === 'ENOENT';
@@ -340,7 +579,23 @@ function launchPythonSidecar() {
     }
 
     pythonProcess.stdout.on('data', (data) => {
-        console.log(`[Python Engine]: ${data}`);
+        sidecarStdoutBuffer += data.toString('utf8');
+        const lines = sidecarStdoutBuffer.split(/\r?\n/);
+        sidecarStdoutBuffer = lines.pop();
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const ready = JSON.parse(line);
+                if (ready.event === 'desktop_ipc_ready' && ready.protocol_version === 3 && Number.isInteger(ready.port)) {
+                    enginePort = ready.port;
+                    connectToPythonServer(enginePort);
+                    continue;
+                }
+            } catch (_) {
+                // The sidecar stdout is a protocol channel. Ignore incidental
+                // library output instead of treating it as desktop diagnostics.
+            }
+        }
     });
 
     pythonProcess.stderr.on('data', (data) => {
@@ -357,7 +612,6 @@ function launchPythonSidecar() {
         });
     });
 
-    setTimeout(connectToPythonServer, 1500);
 }
 
 ipcMain.handle('retry-engine', async () => {
@@ -370,94 +624,243 @@ ipcMain.handle('retry-engine', async () => {
     return { status: 'ok', message: 'Starting the AudioScribe engine.' };
 });
 
-async function toggleRecording(profile = null) {
-    const command = isRecording ? 'stop_recording' : 'start_recording';
-    const params = command === 'start_recording' && profile
-        ? { profile: { id: profile.id, name: profile.name, prompt: profile.prompt } }
-        : {};
-    const result = await sendEngineRequest(command, params);
-    if (result?.status !== 'ok') {
-        console.error('[Electron] Recording command failed:', result?.error || result?.code);
-        return result;
-    }
-    isRecording = command === 'start_recording';
+ipcMain.handle('transcribe-audio-buffer', async (event, { audioBase64, profile }) => {
+    if (!audioBase64) return { status: 'error', error: 'No audio data' };
     if (overlayWindow) {
-        if (isRecording) {
-            overlayWindow.showInactive();
-            overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1, shortcut: profile?.shortcut || currentShortcut });
-        } else {
-            overlayWindow.webContents.send('update-overlay-state', { status: 'processing', shortcut: profile?.shortcut || currentShortcut });
-        }
+        overlayWindow.webContents.send('update-overlay-state', { status: 'processing', shortcut: getOverlayShortcut() });
     }
-    return result;
+    // Use a 120s timeout: STT + LLM post-processing can take significantly longer than the
+    // default 10s engine request timeout, especially for local models or slow connections.
+    const response = await sendEngineRequest('transcribe_audio', { audio_base64: audioBase64, profile }, 120000);
+    
+    // Successful requests already produce a transcription_result from the
+    // Python orchestrator. Only synthesize an event for failures that happen
+    // before the orchestrator can emit one (invalid payload, timeout, etc.).
+    if (response?.status !== 'ok') {
+        publishEngineEvent('transcription_result', {
+            text: '',
+            latency_ms: response?.latency_ms || 0,
+            is_silent: false,
+            is_error: true,
+            error: response?.error || 'Transcription failed.',
+        });
+    }
+    return response;
+});
+
+ipcMain.handle('start-recording', async (event, profile) => {
+    const rejected = untrustedSenderResult(event);
+    return rejected || startRecording(profile || null);
+});
+
+ipcMain.handle('stop-recording', async (event, profile) => {
+    const rejected = untrustedSenderResult(event);
+    return rejected || stopRecording(profile || null);
+});
+
+ipcMain.handle('toggle-recording', async (event, profile) => {
+    const rejected = untrustedSenderResult(event);
+    return rejected || toggleRecording(profile || null);
+});
+
+ipcMain.on('native-recording-started', (event, result = {}) => {
+    if (!trustedMainSender(event)) return;
+    if (!pendingRendererStart) return;
+    if (result.requestId && result.requestId !== pendingRendererStart.requestId) return;
+    const pending = pendingRendererStart;
+    pendingRendererStart = null;
+    pending.resolve(result);
+});
+
+async function startRecording(profile = null) {
+    if (isRecording) return pendingRendererStart?.promise || { status: 'ok', recording: true, already_recording: true };
+    if (!engineReady) {
+        const error = 'The AudioScribe engine is offline. Recording is unavailable until it reconnects.';
+        publishEngineEvent('error', { code: 'engine_offline', stage: 'recording', message: error });
+        return { status: 'error', code: 'engine_offline', error };
+    }
+    const processingReady = await ensureProfileProcessingReady(profile);
+    if (processingReady.status !== 'ok') {
+        publishEngineEvent('error', {
+            code: processingReady.code,
+            stage: 'post_processing',
+            message: processingReady.error,
+        });
+        return processingReady;
+    }
+    isRecording = true;
+    const requestId = `recording-${Date.now()}-${++rendererStartSequence}`;
+    let resolveStart;
+    const promise = new Promise((resolve) => { resolveStart = resolve; });
+    const timer = setTimeout(() => {
+        if (pendingRendererStart?.requestId !== requestId) return;
+        pendingRendererStart = null;
+        resolveStart({ status: 'error', code: 'renderer_recording_timeout', error: 'The microphone recorder did not start in time.' });
+    }, 10000);
+    pendingRendererStart = { requestId, promise, resolve: (result) => { clearTimeout(timer); resolveStart(result); } };
+
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('native-start-recording', { requestId });
+    } else {
+        pendingRendererStart = null;
+        clearTimeout(timer);
+        resolveStart({ status: 'error', code: 'renderer_unavailable', error: 'The desktop window is not ready to record.' });
+    }
+
+    const started = await promise;
+    if (pendingRendererStart?.requestId === requestId) pendingRendererStart = null;
+    if (started?.status !== 'ok') {
+        isRecording = false;
+        if (pushToTalkSafetyTimer) clearTimeout(pushToTalkSafetyTimer);
+        pushToTalkSafetyTimer = null;
+        publishEngineEvent('status_changed', { status: 'ready' });
+        publishEngineEvent('error', {
+            code: started?.code || 'recording_start_failed',
+            stage: 'recording',
+            message: started?.error || 'Could not start the microphone recorder.',
+        });
+        return started;
+    }
+
+    publishEngineEvent('status_changed', { status: 'recording' });
+    if (activationMode === 'push_to_talk') {
+        if (pushToTalkSafetyTimer) clearTimeout(pushToTalkSafetyTimer);
+        // Match OpenWhispr's defensive maximum: a lost key-up cannot leave the
+        // microphone recording forever.
+        pushToTalkSafetyTimer = setTimeout(() => {
+            pushToTalkSafetyTimer = null;
+            if (isRecording) stopRecording(profile);
+        }, 5 * 60 * 1000);
+    }
+    if (overlayWindow) {
+        overlayWindow.showInactive();
+        overlayWindow.webContents.send('update-overlay-state', { status: 'recording', rms: 0.1, shortcut: profile?.shortcut || currentShortcut });
+    }
+    return { status: 'ok', recording: true };
 }
 
-let currentShortcut = 'F9';
+async function stopRecording(profile = null) {
+    if (pushToTalkSafetyTimer) clearTimeout(pushToTalkSafetyTimer);
+    pushToTalkSafetyTimer = null;
+    if (!isRecording && !pendingRendererStart) return { status: 'ok', recording: false, already_stopped: true };
+    if (pendingRendererStart) {
+        const started = await pendingRendererStart.promise;
+        if (started?.status !== 'ok') {
+            isRecording = false;
+            pendingRendererStart = null;
+            return started;
+        }
+    }
+    if (!isRecording) return { status: 'ok', recording: false, already_stopped: true };
+    isRecording = false;
+    if (mainWindow && mainWindow.webContents) mainWindow.webContents.send('native-stop-recording', profile);
+    publishEngineEvent('status_changed', { status: 'processing' });
+    if (overlayWindow) {
+        overlayWindow.webContents.send('update-overlay-state', { status: 'processing', shortcut: profile?.shortcut || currentShortcut });
+    }
+    return { status: 'accepted', recording: false };
+}
+
+async function toggleRecording(profile = null) {
+    let result;
+    if (activationMode === 'push_to_talk') {
+        // Press/release edges are delivered by the native JavaScript hook.
+        // Keep this tray/menu action useful as a safe one-shot start/stop.
+        if (isRecording) result = await stopRecording(profile);
+        else result = await startRecording(profile);
+    } else {
+        // Toggle mode: tap once to start, tap again to stop.
+        if (isRecording) {
+            result = await stopRecording(profile);
+        } else {
+            result = await startRecording(profile);
+        }
+    }
+    if (result?.status === 'error') return result;
+    return { status: 'ok', recording: isRecording };
+}
 
 function registerAllShortcuts() {
     globalShortcut.unregisterAll();
-    const registered = [];
-    const candidates = [{ shortcut: currentShortcut, callback: () => toggleRecording(), kind: 'global' }];
-    activeProfiles.forEach((profile) => {
-        if (profile.enabled && profile.shortcut) candidates.push({ shortcut: profile.shortcut, callback: () => toggleRecording(profile), kind: 'profile', profileId: profile.id });
+    return attemptProfileShortcutRegistration({
+        globalShortcut,
+        profiles: activeProfiles,
+        currentShortcut,
+        onProfileShortcut: (profile) => toggleRecording(profile),
     });
-    const failed = [];
-    candidates.forEach(({ shortcut, callback, kind, profileId }) => {
-        try {
-            const accelerator = String(shortcut).replace(/Ctrl/g, 'Control').replace(/\s*\+\s*/g, '+');
-            if (globalShortcut.register(accelerator, callback)) registered.push(accelerator);
-            else failed.push({ shortcut: accelerator, kind, profileId });
-        } catch (error) {
-            console.error(`[Electron] Failed to register ${shortcut}:`, error.message);
-            failed.push({ shortcut, kind, profileId, error: error.message });
-        }
-    });
-    if (!registered.registered.length && currentShortcut !== 'F9') {
-        currentShortcut = 'F9';
-        if (globalShortcut.register('F9', () => toggleRecording())) registered.registered.push('F9');
-    }
-    return { registered, failed };
 }
 
-function registerShortcut(newKey) {
+async function registerShortcut(newKey) {
     try {
         const previous = currentShortcut;
         currentShortcut = newKey;
-        const registered = registerAllShortcuts();
-        if (registered.registered.includes(newKey.replace(/Ctrl/g, 'Control'))) return { status: 'ok', shortcut: newKey };
-        currentShortcut = previous;
-        registerAllShortcuts();
-        return { status: 'error', error: `Could not register key '${newKey}'. Reverted to ${previous}.` };
+        const res = registerAllShortcuts();
+        const nativeResult = configureNativeHotkey();
+        if (nativeResult?.status !== 'ok' || res.status !== 'ok') {
+            currentShortcut = previous;
+            registerAllShortcuts();
+            configureNativeHotkey();
+            return { status: 'error', error: nativeResult?.error || res.failed?.[0]?.error || `Could not register key '${newKey}'. It may already be in use by another application.` };
+        }
+        return { status: 'ok', shortcut: newKey, registered: res.registered };
     } catch (err) {
         return { status: 'error', error: err.message };
     }
 }
 
 app.whenReady().then(() => {
+    createApplicationMenu();
     createMainWindow();
+    if (IS_E2E) {
+        // Keep the E2E shell hermetic, except for the dedicated Windows test
+        // that verifies the OS -> native listener -> Electron -> renderer path.
+        if (IS_PHYSICAL_HOTKEY_E2E) {
+            engineReady = true;
+            configureNativeHotkey();
+        }
+        return;
+    }
     createOverlayWindow();
     createTray();
+    const hotkeyResult = configureNativeHotkey();
+    if (hotkeyResult?.status !== 'ok') {
+        publishEngineEvent('engine_error', {
+            code: hotkeyResult?.code || 'native_hotkey_unavailable',
+            title: 'Global hotkeys unavailable',
+            message: hotkeyResult?.error || 'AudioScribe could not initialize the native keyboard listener.',
+            remediation: 'Choose another shortcut or reinstall the desktop application.',
+        });
+    }
     launchPythonSidecar();
 
-    registerShortcut('F9');
+    // Register profile shortcuts immediately. The main dictation shortcut is
+    // installed by the native JavaScript hook above.
+    registerAllShortcuts();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
     });
 });
 
-let activeProfiles = [];
-
 function registerProfileShortcuts(profiles) {
-    activeProfiles = profiles || [];
+    const previousProfiles = activeProfiles;
+    const candidateProfiles = Array.isArray(profiles) ? profiles : [];
+    activeProfiles = candidateProfiles;
     const result = registerAllShortcuts();
-    const failedProfiles = result.failed.filter((item) => item.kind === 'profile');
+    if (result.status !== 'ok') {
+        // Registering is all-or-nothing. A rejected change must not silently
+        // deactivate the shortcuts that worked before the edit.
+        activeProfiles = previousProfiles;
+        registerAllShortcuts();
+    }
     return {
-        status: failedProfiles.length ? 'error' : 'ok',
+        status: result.status,
         count: result.registered.length,
         registered: result.registered,
-        failed: failedProfiles,
-        error: failedProfiles.length ? `Could not register ${failedProfiles.length} profile shortcut(s). They may be in use by another application.` : undefined,
+        failed: result.failed,
+        error: result.status !== 'ok'
+            ? result.failed.map((item) => item.error || `Could not register ${item.shortcut}.`).join(' ')
+            : undefined,
     };
 }
 
@@ -465,11 +868,40 @@ ipcMain.handle('update-profiles', async (event, profiles) => {
     return registerProfileShortcuts(profiles);
 });
 
+ipcMain.handle('begin-hotkey-capture', async () => {
+    shortcutCaptureActive = true;
+    // A registered global shortcut is consumed before the renderer receives
+    // keydown, so temporarily release profile accelerators while recording.
+    globalShortcut.unregisterAll();
+    return { status: 'ok' };
+});
+
+ipcMain.handle('end-hotkey-capture', async (event, profiles) => {
+    shortcutCaptureActive = false;
+    return registerProfileShortcuts(profiles);
+});
+
+ipcMain.handle('set-activation-mode', async (event, mode) => {
+    const previousMode = activationMode;
+    activationMode = mode === 'push_to_talk' ? 'push_to_talk' : 'toggle';
+    const shortcutResult = registerAllShortcuts();
+    const nativeResult = configureNativeHotkey();
+    if (nativeResult?.status !== 'ok' || shortcutResult.status !== 'ok') {
+        activationMode = previousMode;
+        registerAllShortcuts();
+        configureNativeHotkey();
+        return { status: 'error', error: nativeResult?.error || shortcutResult.failed?.[0]?.error || 'Could not register the desktop shortcut in toggle mode.' };
+    }
+    return { ...nativeResult, mode: activationMode };
+});
+
 ipcMain.handle('register-shortcut', async (event, key) => {
     return registerShortcut(key);
 });
 
-ipcMain.handle('get-provider-config', async () => {
+ipcMain.handle('get-provider-config', async (event) => {
+    const rejected = untrustedSenderResult(event);
+    if (rejected) return rejected;
     const config = loadProviderConfig();
     if (!config) return { status: 'ok', config: null };
     const safeConfig = {
@@ -485,6 +917,8 @@ ipcMain.handle('get-provider-config', async () => {
 });
 
 ipcMain.handle('save-provider-config', async (event, config) => {
+    const rejected = untrustedSenderResult(event);
+    if (rejected) return rejected;
     const current = loadProviderConfig() || {};
     const next = {
         ...current,
@@ -495,14 +929,47 @@ ipcMain.handle('save-provider-config', async (event, config) => {
     if (!Object.prototype.hasOwnProperty.call(config.transcription || {}, 'api_key')) {
         next.transcription.api_key = current.transcription?.api_key || current.api_key || null;
     }
+    if (next.transcription.api_key === 'configured') {
+        next.transcription.api_key = current.transcription?.api_key || current.api_key || null;
+    }
     if (!Object.prototype.hasOwnProperty.call(config.llm || {}, 'api_key')) {
+        next.llm.api_key = current.llm?.api_key || current.api_key || null;
+    }
+    if (next.llm.api_key === 'configured') {
         next.llm.api_key = current.llm?.api_key || current.api_key || null;
     }
     if (config.api_key === 'configured' || !Object.prototype.hasOwnProperty.call(config, 'api_key')) {
         next.api_key = current.api_key || null;
     }
-    saveProviderConfig(next);
+
+    // Saving an enabled post-processing provider is a fail-fast operation.
+    // Do this before applying it to the engine or secure store so a bad key or
+    // unavailable model never becomes a configuration that can accept audio.
+    let llmValidation = null;
+    if (next.llm?.enabled) {
+        llmValidation = llmValidationRequest(next);
+        if (llmValidation.status !== 'ok') return llmValidation;
+        const check = await sendEngineRequest('test_connection', llmValidation.params, 15000);
+        if (check?.status !== 'ok') {
+            return {
+                status: 'error',
+                code: 'llm_validation_failed',
+                error: check?.error || 'The post-processing model could not complete its validation request.',
+            };
+        }
+    }
     const result = await sendEngineRequest('configure_provider', next);
+    if (result?.status !== 'ok') return result;
+    try {
+        saveProviderConfig(next);
+    } catch (error) {
+        // Keep the previous persisted configuration authoritative if the OS
+        // keychain cannot store the candidate. Best-effort rollback prevents
+        // an engine-only configuration from surprising the next app launch.
+        if (Object.keys(current).length) await sendEngineRequest('configure_provider', current);
+        return { status: 'error', code: 'credential_storage_unavailable', error: error.message };
+    }
+    if (llmValidation?.fingerprint) validatedProfileProcessors.add(llmValidation.fingerprint);
     return { ...result, config: {
         ...next,
         api_key: next.api_key ? 'configured' : '',
@@ -511,12 +978,130 @@ ipcMain.handle('save-provider-config', async (event, config) => {
     } };
 });
 
-ipcMain.handle('engine-command', async (event, { command, params }) => {
-    return sendEngineRequest(command, params);
+async function engineReadCommand(event, command, params = {}) {
+    const rejected = untrustedSenderResult(event);
+    return rejected || sendEngineRequest(command, params);
+}
+
+ipcMain.handle('get-local-models', (event) => engineReadCommand(event, 'get_local_models'));
+ipcMain.handle('get-models', (event) => engineReadCommand(event, 'get_models'));
+ipcMain.handle('run-preflight', (event, params) => engineReadCommand(event, 'preflight', params || {}));
+
+const RENDERER_ENGINE_COMMANDS = new Set([
+    'get_history', 'delete_history', 'clear_history', 'get_snippets',
+    'save_snippet', 'delete_snippet', 'get_dictionary', 'update_dictionary',
+    'get_local_models', 'download_local_model', 'cancel_local_model',
+    'delete_local_model', 'get_usage', 'configure_provider',
+]);
+
+// Compatibility bridge while the large renderer is migrated to explicit
+// methods. Arbitrary engine commands are no longer reachable from the page.
+ipcMain.handle('engine-command', async (event, { command, params } = {}) => {
+    const rejected = untrustedSenderResult(event);
+    if (rejected) return rejected;
+    if (!RENDERER_ENGINE_COMMANDS.has(command)) {
+        return { status: 'error', code: 'command_not_exposed', error: 'This engine command is not available to the renderer.' };
+    }
+    return sendEngineRequest(command, params || {});
+});
+
+ipcMain.handle('test-provider-connection', async (event, params) => {
+    const rejected = untrustedSenderResult(event);
+    return rejected || sendEngineRequest('test_connection', params);
+});
+
+ipcMain.handle('get-paste-capabilities', () => require('./src/output').capabilities());
+ipcMain.handle('copy-text', (_event, text) => require('./src/output').copyAndPaste(String(text || ''), { automatic: false }));
+
+// Mirror Electron's systemPreferences.askForMediaAccess for macOS.
+// On Windows/Linux, getUserMedia in the renderer handles permission prompts
+// natively — the main process has no equivalent API.
+ipcMain.handle('request-microphone-access', async () => {
+    if (process.platform !== 'darwin') {
+        return { granted: true };
+    }
+    try {
+        const { systemPreferences } = require('electron');
+        const granted = await systemPreferences.askForMediaAccess('microphone');
+        return { granted };
+    } catch (_) {
+        return { granted: false };
+    }
+});
+
+ipcMain.handle('check-os-permissions', async () => {
+    const platform = process.platform;
+    let micGranted = true;
+    let accessibilityGranted = true;
+
+    if (platform === 'darwin') {
+        const { systemPreferences } = require('electron');
+        try {
+            micGranted = systemPreferences.getMediaAccessStatus('microphone') === 'granted';
+            accessibilityGranted = systemPreferences.isTrustedAccessibilityClient(false);
+        } catch (e) {
+            safeErr('Failed checking macOS permissions:', e);
+        }
+    } else if (platform === 'win32') {
+        // On Windows we cannot query OS-level mic permission from the main
+        // process.  getUserMedia in the renderer is the canonical test.
+        micGranted = true;
+        accessibilityGranted = true;
+    } else if (platform === 'linux') {
+        const pasteInfo = require('./src/output').capabilities();
+        accessibilityGranted = pasteInfo.available !== false;
+        micGranted = true;
+    }
+
+    return { platform, micGranted, accessibilityGranted };
+});
+
+ipcMain.handle('open-os-settings', async (_event, settingType) => {
+    const { shell } = require('electron');
+    const platform = process.platform;
+    try {
+        if (settingType === 'microphone') {
+            if (platform === 'win32') {
+                await shell.openExternal('ms-settings:privacy-microphone');
+                return { status: 'ok' };
+            } else if (platform === 'darwin') {
+                await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+                return { status: 'ok' };
+            } else {
+                return { status: 'error', error: 'Platform not supported for microphone settings shortcut' };
+            }
+        }
+        if (settingType === 'sound') {
+            if (platform === 'win32') {
+                await shell.openExternal('ms-settings:sound');
+                return { status: 'ok' };
+            } else if (platform === 'darwin') {
+                await shell.openExternal('x-apple.systempreferences:com.apple.preference.sound');
+                return { status: 'ok' };
+            } else {
+                return { status: 'error', error: 'Platform not supported for sound settings shortcut' };
+            }
+        }
+        if (settingType === 'accessibility') {
+            if (platform === 'win32') {
+                await shell.openExternal('ms-settings:easeofaccess-keyboard');
+                return { status: 'ok' };
+            } else if (platform === 'darwin') {
+                await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+                return { status: 'ok' };
+            } else {
+                return { status: 'error', error: 'Platform not supported for accessibility settings shortcut' };
+            }
+        }
+        return { status: 'error', error: `Unknown setting type: ${settingType}` };
+    } catch (err) {
+        return { status: 'error', error: err.message };
+    }
 });
 
 app.on('will-quit', () => {
     globalShortcut.unregisterAll();
+    if (nativeHotkeys) nativeHotkeys.stop();
     if (pythonProcess) {
         pythonProcess.kill();
     }

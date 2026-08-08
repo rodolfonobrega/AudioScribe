@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from core.local_store import default_data_dir
+
 
 @dataclass
 class UsageRecord:
@@ -29,9 +31,37 @@ class UsageRecord:
     error_code: Optional[str] = None
 
 
-def audio_duration_seconds(audio_data: bytes) -> Optional[float]:
-    """Return WAV duration without failing the transcription pipeline."""
+def has_audio_data(audio_data: Any) -> bool:
+    """Return whether an audio payload contains samples without ambiguous array truthiness."""
+    if audio_data is None:
+        return False
     try:
+        return len(audio_data) > 0
+    except TypeError:
+        return bool(audio_data)
+
+
+def is_wav_audio(audio_data: Any) -> bool:
+    """Return whether a byte payload has a RIFF/WAVE header."""
+    return (
+        isinstance(audio_data, (bytes, bytearray))
+        and len(audio_data) >= 12
+        and audio_data[:4] == b"RIFF"
+        and audio_data[8:12] == b"WAVE"
+    )
+
+
+def audio_duration_seconds(audio_data: bytes) -> Optional[float]:
+    """Return WAV/OGG duration without failing the transcription pipeline."""
+    try:
+        if not has_audio_data(audio_data):
+            return None
+        if isinstance(audio_data, bytes) and audio_data.startswith(b'OggS'):
+            import soundfile as sf
+            info = sf.info(io.BytesIO(audio_data))
+            return info.duration
+        if not is_wav_audio(audio_data):
+            return None
         with wave.open(io.BytesIO(audio_data), "rb") as wav:
             return wav.getnframes() / float(wav.getframerate())
     except Exception:
@@ -94,7 +124,7 @@ class PriceCatalog:
 
 class UsageStore:
     def __init__(self, path: Optional[str] = None):
-        default_dir = Path(os.getenv("AUDIOSCRIBE_DATA_DIR", Path.home() / ".audioscribe"))
+        default_dir = Path(os.getenv("AUDIOSCRIBE_DATA_DIR", default_data_dir()))
         self.path = Path(path or default_dir / "usage.sqlite3")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()

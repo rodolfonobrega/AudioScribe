@@ -4,6 +4,7 @@ Supports mixing different providers (LiteLLM, Ollama, local models, etc.).
 """
 
 import time
+from core.utils.preflight import safe_print
 from typing import List, Optional, Dict
 
 from core.interfaces.llm_processor import AbstractLLMProcessor
@@ -108,13 +109,13 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
                         # Success - update stats and return
                         self._processor_usage[processor_name] += 1
                         if idx > 0:
-                            print(f"✓ Fallback successful: {processor_name}")
+                            safe_print(f"[OK] Fallback successful: {processor_name}")
                         return result
 
                 except Exception as e:
                     # Determine if we should retry or fallback
                     if should_fallback(e):
-                        print(f"✗ {processor_name} failed: {e}")
+                        safe_print(f"[X] {processor_name} failed: {e}")
                         break  # Skip to next processor
                     elif should_retry(e) and retry_attempt < self.max_retries - 1:
                         delay = retry_with_backoff(retry_attempt, self.retry_delay)
@@ -126,7 +127,7 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
                         continue
                     else:
                         # Unknown error or final retry failed
-                        print(f"✗ {processor_name} failed: {e}")
+                        safe_print(f"[X] {processor_name} failed: {e}")
                         break
 
             # If we get here, the current processor failed after all retries
@@ -136,7 +137,7 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
                 self._fallback_count += 1
 
         # All processors exhausted
-        print("✗ All fallback processors exhausted")
+        safe_print("[X] All fallback processors exhausted")
         return None
 
     def process(self, text: str, system_prompt_override: Optional[str] = None) -> Optional[str]:
@@ -181,7 +182,7 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
                 # Mark as validated
                 is_primary = idx == 0
                 label = "Primary" if is_primary else "Fallback"
-                print(f"✓ {label} processor validated: {processor_name}")
+                safe_print(f"[OK] {label} processor validated: {processor_name}")
 
             except Exception as e:
                 label = "Primary" if idx == 0 else "Fallback"
@@ -189,4 +190,4 @@ class FallbackLLMProcessor(AbstractLLMProcessor):
                     f"{label} processor validation failed for {processor_name}: {e}"
                 )
 
-        print("✓ LLM processor chain ready")
+        safe_print("[OK] LLM processor chain ready")

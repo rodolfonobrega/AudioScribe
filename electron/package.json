@@ -5,6 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test:e2e": "node e2e/app.e2e.js",
+    "test:e2e:physical-hotkey": "node e2e/physical_hotkey.e2e.js",
     "build:win": "electron-builder --win --publish never",
     "build:mac": "electron-builder --mac --publish never",
     "build:linux": "electron-builder --linux --publish never"
@@ -19,15 +21,21 @@
   ],
   "author": "AudioScribe Team",
   "dependencies": {
-    "electron-updater": "^6.3.0"
+    "electron-updater": "^6.3.0",
+    "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "playwright": "^1.54.2"
   },
   "build": {
     "appId": "com.audioscribe.desktop",
     "productName": "AudioScribe",
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/uiohook-napi/prebuilds/**/*"
+    ],
     "icon": "../assets/audioscribe-icon.png",
     "publish": {
       "provider": "github",
@@ -41,23 +49,33 @@
       {
         "from": "../assets",
         "to": "assets",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "bin",
         "to": "bin",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": "nsis"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.productivity"
     },
     "linux": {
-      "target": ["AppImage", "tar.gz"],
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
       "category": "Utility"
     },
     "nsis": {

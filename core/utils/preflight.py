@@ -10,6 +10,8 @@ import subprocess
 import sys
 from typing import List, Dict, Tuple, Optional
 
+from core.utils.permissions import PermissionManager
+
 
 def safe_print(text: str) -> None:
     """Print text safely handling Windows terminal encoding issues."""
@@ -49,6 +51,22 @@ class PreflightChecker:
 
         return len(self.errors) == 0
 
+    def check_desktop_engine(self) -> bool:
+        """Check only services owned by the Python engine in desktop mode.
+
+        Electron owns microphone permissions, device selection, and hotkeys.
+        Keeping those probes out of the sidecar prevents Python/PortAudio from
+        touching audio hardware in the non-CLI application.
+        """
+        self.errors.clear()
+        self.warnings.clear()
+
+        self.check_api_keys()
+        self.check_output_handlers()
+        self.check_updates()
+
+        return len(self.errors) == 0
+
     def check_updates(self) -> None:
         """Check GitHub for new AudioScribe release."""
         try:
@@ -77,8 +95,11 @@ class PreflightChecker:
             llm_key = getattr(llm, 'api_key', None) if llm else None
             llm_base_url = getattr(llm, 'base_url', None) if llm else None
             llm_enabled = bool(llm and getattr(llm, 'enabled', True))
+            local_transcription = str(getattr(self.config.transcription, 'provider', '')).lower() in {
+                'local_whisper', 'whisper_local', 'whisper', 'parakeet', 'local_parakeet'
+            }
 
-            if not trans_base_url and not trans_key and not groq_key and not openai_key and not litellm_key:
+            if not local_transcription and not trans_base_url and not trans_key and not groq_key and not openai_key and not litellm_key:
                 self.errors.append({
                     "component": "API Keys / Transcrição",
                     "issue": "A transcrição não possui chave de API nem endpoint local configurado.",
@@ -140,31 +161,34 @@ class PreflightChecker:
             })
 
     def check_os_permissions(self) -> None:
-        """Check macOS / Linux specific permissions."""
-        if self.system == "Darwin":  # macOS
-            # Check AppleScript / Accessibility permission
-            try:
-                result = subprocess.run(
-                    ["osascript", "-e", 'tell application "System Events" to get name of first process'],
-                    capture_output=True,
-                    text=True,
-                    timeout=3
-                )
-                if result.returncode != 0 and "not allowed" in result.stderr.lower():
-                    self.warnings.append({
-                        "component": "macOS Permissions (Accessibility)",
-                        "issue": "Terminal/Python lacks Accessibility permissions to simulate typing.",
-                        "remediation": (
-                            "1. Open: System Settings > Privacy & Security > Accessibility.\n"
-                            "2. Toggle the switch ON for your Terminal app (e.g., Terminal, iTerm2, VS Code).\n"
-                            "3. If your app is not listed, click '+' to add it manually."
-                        )
-                    })
-            except Exception:
-                pass
+        """Check OS-specific permissions: microphone, accessibility, display server."""
+        perm_manager = PermissionManager()
 
-        elif self.system == "Linux":
-            # Check Wayland vs X11
+        # --- Microphone permission (all platforms) ---
+        has_mic, mic_guidance = perm_manager.check_microphone_permission()
+        if not has_mic and mic_guidance:
+            self.errors.append({
+                "component": "Microphone Permission",
+                "issue": mic_guidance.split('\n')[0] if '\n' in mic_guidance else mic_guidance,
+                "remediation": mic_guidance[mic_guidance.index('•') if '•' in mic_guidance else 0:]
+            })
+
+        # --- Accessibility permission (macOS) ---
+        if self.system == "Darwin":
+            has_acc, acc_guidance = perm_manager.check_accessibility_permission()
+            if not has_acc and acc_guidance:
+                self.warnings.append({
+                    "component": "macOS Permissions (Accessibility)",
+                    "issue": "Terminal/Python lacks Accessibility permissions to simulate typing.",
+                    "remediation": (
+                        "1. Open: System Settings > Privacy & Security > Accessibility.\n"
+                        "2. Toggle the switch ON for your Terminal app (e.g., Terminal, iTerm2, VS Code).\n"
+                        "3. If your app is not listed, click '+' to add it manually."
+                    )
+                })
+
+        # --- Display server (Linux) ---
+        if self.system == "Linux":
             session_type = os.getenv("XDG_SESSION_TYPE", "").lower()
             if session_type == "wayland":
                 self.warnings.append({

@@ -22,6 +22,8 @@ class TerminalUI:
     
     def show_banner(self):
         """Display ASCII art banner."""
+        if not self.verbose:
+            return
         try:
             print("""
  █████╗ ██╗   ██╗██████╗ ██╗ ██████╗ ███████╗ ██████╗██████╗ ██╗██████╗ ███████╗
@@ -145,18 +147,11 @@ class TerminalUI:
         print(f"\r{' ' * 70}\r", end="", flush=True)
         print(f"\r[{status}]", end="", flush=True)
     
-    def update_live_status(self, state: str, details: str = ""):
-        """
-        Update live status with emojis in a single line.
-        
-        Args:
-            state: Current state (ready, recording, processing, etc.)
-            details: Additional details to display
-        """
+    def update_live_status(self, state: str, details: str = None):
+        """Update live status line in terminal."""
         if not self.verbose:
             return
-        
-        # Define emoji states
+
         states = {
             "ready": "🎙️  Ready",
             "recording": "🔴 Recording",
@@ -172,8 +167,10 @@ class TerminalUI:
         if details:
             status_line += f" | {details}"
         
-        # Clear line and write new status
-        print(f"\r{' ' * 100}\r{status_line}", end="", flush=True)
+        try:
+            print(f"\r{' ' * 100}\r{status_line}", end="", flush=True)
+        except Exception:
+            pass
     
     def clear_status_line(self):
         """Clear the current status line."""

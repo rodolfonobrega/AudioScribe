@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark light">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <title>AudioScribe</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -44,6 +45,10 @@
                         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5z"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>
                         <span>Profiles</span>
                     </button>
+                    <button class="nav-btn" data-tab="library" type="button">
+                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v13H5z"/><path d="M8 9h8M8 12h6M8 15h4"/></svg>
+                        <span>Library</span>
+                    </button>
                     <button class="nav-btn" data-tab="settings" type="button">
                         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19 13.5 1.2 1-.9 1.6-1.5-.5a7.3 7.3 0 0 1-1.6 1l-.2 1.6h-1.8l-.6-1.5a7.4 7.4 0 0 1-1.9 0l-.6 1.5h-1.8l-.2-1.6a7.3 7.3 0 0 1-1.6-1l-1.5.5-.9-1.6 1.2-1a7.5 7.5 0 0 1 0-2l-1.2-1 .9-1.6 1.5.5a7.3 7.3 0 0 1 1.6-1l.2-1.6h1.8l.6 1.5a7.4 7.4 0 0 1 1.9 0l.6-1.5H16l.2 1.6a7.3 7.3 0 0 1 1.6 1l1.5-.5.9 1.6-1.2 1a7.5 7.5 0 0 1 0 2Z"/></svg>
                         <span>Settings</span>
@@ -57,7 +62,7 @@
                 <div class="sidebar-footer">
                     <span class="footer-rule"></span>
                     <span>Global Shortcut</span>
-                    <kbd id="sidebar-hotkey">F9</kbd>
+                    <kbd id="sidebar-hotkey">Ctrl + Win</kbd>
                 </div>
             </aside>
 
@@ -80,7 +85,7 @@
                                 <p class="record-state" id="record-btn-label">Start recording</p>
                                 <button class="record-btn" id="record-toggle-btn" type="button"><span id="record-action-label">Start Dictating</span><span class="record-arrow" aria-hidden="true">↗</span></button>
                             </div>
-                            <div class="hotkey-display"><span>or press global shortcut</span><kbd id="active-hotkey-badge">F9</kbd></div>
+                            <div class="hotkey-display"><span>or press global shortcut</span><kbd id="active-hotkey-badge">Ctrl + Win</kbd></div>
                         </section>
 
                         <div class="metrics-grid" aria-label="Productivity Metrics">
@@ -106,7 +111,7 @@
                     <section class="card history-card" aria-labelledby="history-heading">
                         <div class="card-header"><div><p class="eyebrow">Recent History</p><h2 id="history-heading">Transcriptions</h2></div><button class="btn-text-only" id="clear-history-btn" type="button">Clear History</button></div>
                         <div class="transcription-list" id="transcription-list">
-                            <div class="empty-state" id="empty-history-state"><img class="empty-state-art" src="assets/history-empty.png" alt=""><span class="empty-line"></span><p>Your recent dictations will appear here.</p><small>Press <kbd>F9</kbd> anywhere on your computer to start dictating.</small></div>
+                            <div class="empty-state" id="empty-history-state"><img class="empty-state-art" src="assets/history-empty.png" alt=""><span class="empty-line"></span><p>Your recent dictations will appear here.</p><small>Press <kbd id="history-empty-hotkey">Ctrl + Win</kbd> anywhere on your computer to start dictating.</small></div>
                         </div>
                     </section>
                 </div>
@@ -116,36 +121,735 @@
                     <div class="card settings-card"><div class="section-intro"><span class="section-index">01</span><div><h2>Active Profiles</h2><p class="section-desc">Each profile can have a system instruction and a dedicated global shortcut key.</p></div></div><div class="profiles-list" id="profiles-list"></div></div>
                 </div>
 
+                <div class="tab-content" id="tab-library">
+                    <div class="page-heading compact"><div><p class="eyebrow">Workspace / Library</p><h1>Snippets & Dictionary</h1><p class="page-description">Keep names, phrases and reusable blocks on this device. Nothing here is synchronized.</p></div></div>
+                    <div class="library-grid">
+                        <section class="card settings-card" aria-labelledby="snippets-heading">
+                            <div class="section-intro"><span class="section-index">01</span><div><h2 id="snippets-heading">Snippets</h2><p class="section-desc">Say a trigger phrase and AudioScribe expands it before pasting.</p></div></div>
+                            <div class="snippet-editor">
+                                <div class="form-group"><label for="snippet-trigger-input">Trigger phrase</label><input id="snippet-trigger-input" type="text" placeholder="my signature"></div>
+                                <div class="form-group"><label for="snippet-replacement-input">Expanded text</label><textarea id="snippet-replacement-input" rows="3" placeholder="Best regards,&#10;Rodolfo"></textarea></div>
+                                <div class="form-actions"><button class="btn-primary" id="save-snippet-btn" type="button">Save snippet</button><span class="save-note" id="snippet-status" role="status"></span></div>
+                            </div>
+                            <div class="library-list" id="snippets-list"><p class="placeholder-text">No snippets yet.</p></div>
+                        </section>
+                        <section class="card settings-card" aria-labelledby="dictionary-heading">
+                            <div class="section-intro"><span class="section-index">02</span><div><h2 id="dictionary-heading">Dictionary</h2><p class="section-desc">Add names, product terms and words that your local model should recognize.</p></div></div>
+                            <div class="form-group"><label for="dictionary-word-input">Add a word</label><div class="inline-form"><input id="dictionary-word-input" type="text" placeholder="OpenAI"><button class="btn-secondary" id="add-dictionary-btn" type="button">Add</button></div></div>
+                            <div class="library-list" id="dictionary-list"><p class="placeholder-text">No custom words yet.</p></div>
+                        </section>
+                    </div>
+                </div>
+
                 <div class="tab-content" id="tab-settings">
-                    <div class="page-heading compact"><div><p class="eyebrow">Workspace / Settings</p><h1>Settings & Engine</h1><p class="page-description">Configure speech recognition providers, API keys, and audio devices.</p></div></div>
-                    <div class="card settings-card"><div class="section-intro"><span class="section-index">01</span><div><h2>AI Providers & Models</h2><p class="section-desc">Configure speech and post-processing independently. Credentials are securely stored locally.</p></div></div>
+                    <div class="page-heading compact">
+                        <div>
+                            <p class="eyebrow">Workspace / Settings</p>
+                            <h1>Settings</h1>
+                            <p class="page-description">Set up the parts that affect dictation: access, providers, local models, and recording behavior.</p>
+                        </div>
+                        <div class="settings-heading-actions">
+                            <button class="btn-secondary" id="relaunch-onboarding-btn" type="button">
+                                <span>Open setup</span>
+                            </button>
+                            <button class="btn-danger-quiet" id="reset-config-btn" type="button">
+                                <span>Reset setup</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- OS Permissions Card -->
+                    <div class="card settings-card">
+                        <div class="section-intro settings-section-heading">
+                            <div>
+                                <h2>Access</h2>
+                                <p class="section-desc">AudioScribe checks these permissions where the operating system allows it. We only show an action when there is something to do.</p>
+                            </div>
+                            <button class="btn-link-action" id="recheck-permissions-btn" type="button">Check again</button>
+                        </div>
+                        <div class="permissions-grid">
+                            <div class="perm-card" id="perm-mic-card">
+                                <span class="perm-mark" aria-hidden="true">MIC</span>
+                                <div class="perm-info">
+                                    <strong>Microphone</strong>
+                                    <span id="perm-mic-desc">Used to capture dictation.</span>
+                                </div>
+                                <span class="perm-badge" id="perm-mic-status">Checking...</span>
+                                <div class="perm-actions">
+                                    <button class="btn-secondary-sm" id="grant-mic-btn" type="button">Request access</button>
+                                    <button class="btn-link-action" id="open-mic-settings-btn" type="button">System settings</button>
+                                </div>
+                            </div>
+                            <div class="perm-card" id="perm-paste-card">
+                                <span class="perm-mark" aria-hidden="true">OUT</span>
+                                <div class="perm-info">
+                                    <strong>Paste output</strong>
+                                    <span id="perm-paste-desc">Sends the final text to your active app.</span>
+                                </div>
+                                <span class="perm-badge" id="perm-paste-status">Checking...</span>
+                                <div class="perm-actions">
+                                    <button class="btn-secondary-sm" id="grant-paste-btn" type="button">Check support</button>
+                                    <button class="btn-link-action" id="open-accessibility-settings-btn" type="button">System settings</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Providers Card Grid -->
+                    <div class="card settings-card">
+                        <div class="section-intro">
+                            <span class="section-index">02</span>
+                            <div>
+                                <h2>AI Providers & Models</h2>
+                                <p class="section-desc">Configure speech transcription and LLM post-processing independently. Credentials are stored securely on this computer.</p>
+                            </div>
+                        </div>
+
                         <div class="provider-card-grid">
-                            <section class="provider-card" aria-labelledby="transcription-provider-heading"><div class="provider-card-heading"><div><span class="provider-kicker">Speech to text</span><h3 id="transcription-provider-heading">Transcription</h3></div><span class="provider-status" id="transcription-provider-status">Not tested</span></div>
-                                <div class="form-group"><label for="transcription-provider-select">Provider</label><select id="transcription-provider-select"><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="custom">Custom speech endpoint</option><option value="ollama">Ollama (chat only)</option></select></div>
-                                <div class="form-group"><label for="transcription-model-select">Model</label><select id="transcription-model-select"><option value="">Waiting for engine...</option></select><span class="input-hint">Only models returned by the configured endpoint appear here.</span></div>
-                                <div class="form-group"><label for="transcription-api-key-input">API key</label><input type="password" id="transcription-api-key-input" placeholder="Stored securely" autocomplete="off"><span class="input-hint" id="transcription-api-key-hint">Leave blank to keep the stored key.</span></div>
-                                <div class="form-group"><div class="field-label-row"><label for="transcription-base-url-input">Base URL <span class="optional-label">optional</span></label><button class="btn-link" id="reset-transcription-url-btn" type="button">Use provider default</button></div><input type="url" id="transcription-base-url-input" placeholder="https://api.groq.com/openai/v1"><span class="input-hint">Changing provider updates this automatically. You can override it for a proxy or compatible endpoint.</span></div>
+                            <!-- Transcription Provider Section -->
+                            <section class="provider-card" aria-labelledby="transcription-provider-heading">
+                                <div class="provider-card-heading">
+                                    <div class="flex-heading">
+                                        <img src="assets/providers/whisper.svg" alt="" class="provider-logo-heading" id="stt-active-logo">
+                                        <div>
+                                            <span class="provider-kicker">Speech to Text</span>
+                                            <h3 id="transcription-provider-heading">Transcription</h3>
+                                        </div>
+                                    </div>
+                                    <span class="provider-status" id="transcription-provider-status">Not tested</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="transcription-provider-select">Provider</label>
+                                    <div class="select-with-logo">
+                                        <select id="transcription-provider-select">
+                                            <option value="groq" data-logo="groq.svg">Groq (Whisper Large v3)</option>
+                                            <option value="openai" data-logo="openai.svg">OpenAI (Whisper-1 / GPT-4o Transcribe)</option>
+                                            <option value="nvidia" data-logo="nvidia.svg">NVIDIA NIM (Parakeet / Canary)</option>
+                                            <option value="mistral" data-logo="mistral.svg">Mistral (Voxtral Mini)</option>
+                                            <option value="openrouter" data-logo="openrouter.svg">OpenRouter (200+ Speech Models)</option>
+                                            <option value="local_whisper" data-logo="whisper.svg">Local Whisper (ggml-base / turbo)</option>
+                                            <option value="parakeet" data-logo="whisper.svg">Local Parakeet (sherpa-onnx)</option>
+                                            <option value="custom" data-logo="custom.svg">Custom Speech Endpoint</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="transcription-model-select">Model</label>
+                                    <select id="transcription-model-select">
+                                        <option value="">Waiting for engine...</option>
+                                    </select>
+                                    <span class="input-hint">Models returned by the provider endpoint.</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="field-label-row">
+                                        <label for="transcription-api-key-input">API Key</label>
+                                        <a href="#" class="get-key-link" id="get-stt-key-link" target="_blank" rel="noopener">Get API Key ↗</a>
+                                    </div>
+                                    <input type="password" id="transcription-api-key-input" placeholder="Stored securely" autocomplete="off">
+                                    <span class="input-hint" id="transcription-api-key-hint">Leave blank to keep current stored key.</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="field-label-row">
+                                        <label for="transcription-base-url-input">Base URL <span class="optional-label">optional</span></label>
+                                        <button class="btn-link" id="reset-transcription-url-btn" type="button">Default</button>
+                                    </div>
+                                    <input type="url" id="transcription-base-url-input" placeholder="https://api.groq.com/openai/v1">
+                                </div>
+
+                                <div class="form-group" id="transcription-model-path-group">
+                                    <label for="transcription-model-path-input">Local Model Folder <span class="optional-label">optional</span></label>
+                                    <input type="text" id="transcription-model-path-input" placeholder="Managed directory or local folder path">
+                                </div>
+
+                                <button class="btn-secondary-sm w-full" id="test-stt-btn" type="button">⚡ Test Transcription Connection</button>
                             </section>
-                            <section class="provider-card" aria-labelledby="llm-provider-heading"><div class="provider-card-heading"><div><span class="provider-kicker">Post-processing</span><h3 id="llm-provider-heading">LLM refinement</h3></div><span class="provider-status" id="llm-provider-status">Not tested</span></div>
-                                <div class="form-group"><label for="llm-provider-select">Provider</label><select id="llm-provider-select"><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="ollama">Ollama</option><option value="custom">Custom compatible endpoint</option></select></div>
-                                <div class="form-group"><label for="llm-model-select">Model</label><select id="llm-model-select"><option value="">Waiting for engine...</option></select><span class="input-hint">For OpenRouter, use the provider model id, such as <code>openai/gpt-4o-mini</code>.</span></div>
-                                <div class="form-group"><label for="llm-api-key-input">API key</label><input type="password" id="llm-api-key-input" placeholder="Stored securely" autocomplete="off"><span class="input-hint" id="llm-api-key-hint">OpenRouter keys are stored only by the desktop process.</span></div>
-                                <div class="form-group"><div class="field-label-row"><label for="llm-base-url-input">Base URL <span class="optional-label">optional</span></label><button class="btn-link" id="reset-llm-url-btn" type="button">Use provider default</button></div><input type="url" id="llm-base-url-input" placeholder="https://openrouter.ai/api/v1"><span class="input-hint">Changing provider updates this automatically. You can override it for a proxy or compatible endpoint.</span></div>
+
+                            <!-- LLM Post-Processing Section -->
+                            <section class="provider-card" aria-labelledby="llm-provider-heading">
+                                <div class="provider-card-heading">
+                                    <div class="flex-heading">
+                                        <img src="assets/providers/openai.svg" alt="" class="provider-logo-heading" id="llm-active-logo">
+                                        <div>
+                                            <span class="provider-kicker">Post-Processing</span>
+                                            <h3 id="llm-provider-heading">LLM Text Refinement</h3>
+                                        </div>
+                                    </div>
+                                    <span class="provider-status" id="llm-provider-status">Not tested</span>
+                                </div>
+
+                                <div class="form-group toggle-group">
+                                    <label class="toggle-row" for="llm-enabled-checkbox">
+                                        <span><strong>Enable profile processing</strong><small>Allows profiles with an instruction to transform text; plain dictation stays raw.</small></span>
+                                    <input type="checkbox" id="llm-enabled-checkbox">
+                                    </label>
+                                </div>
+
+                                <div id="llm-config-wrapper">
+                                    <div class="form-group">
+                                        <label for="llm-provider-select">Provider</label>
+                                        <select id="llm-provider-select">
+                                            <option value="groq" data-logo="groq.svg">Groq (Llama 3.3 70B)</option>
+                                            <option value="openai" data-logo="openai.svg">OpenAI (GPT-4o / GPT-4o-mini)</option>
+                                            <option value="nvidia" data-logo="nvidia.svg">NVIDIA NIM (Llama 3.3 / Nemotron)</option>
+                                            <option value="anthropic" data-logo="anthropic.svg">Anthropic (Claude 3.5 Sonnet / Haiku)</option>
+                                            <option value="gemini" data-logo="gemini.svg">Google Gemini (Gemini 2.5 Flash)</option>
+                                            <option value="mistral" data-logo="mistral.svg">Mistral AI (Mistral Small / Large)</option>
+                                            <option value="openrouter" data-logo="openrouter.svg">OpenRouter (200+ Models)</option>
+                                            <option value="xai" data-logo="xai.svg">xAI (Grok 2)</option>
+                                            <option value="ollama" data-logo="ollama.svg">Ollama (Local LLM)</option>
+                                            <option value="custom" data-logo="custom.svg">Custom Compatible Endpoint</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="llm-model-select">Model</label>
+                                        <select id="llm-model-select">
+                                            <option value="">Waiting for engine...</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <div class="field-label-row">
+                                            <label for="llm-api-key-input">API Key</label>
+                                            <a href="#" class="get-key-link" id="get-llm-key-link" target="_blank" rel="noopener">Get API Key ↗</a>
+                                        </div>
+                                        <input type="password" id="llm-api-key-input" placeholder="Stored securely" autocomplete="off">
+                                        <span class="input-hint" id="llm-api-key-hint">Leave blank to keep current stored key.</span>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <div class="field-label-row">
+                                            <label for="llm-base-url-input">Base URL <span class="optional-label">optional</span></label>
+                                            <button class="btn-link" id="reset-llm-url-btn" type="button">Default</button>
+                                        </div>
+                                        <input type="url" id="llm-base-url-input" placeholder="https://api.openai.com/v1">
+                                    </div>
+
+                                    <button class="btn-secondary-sm w-full" id="test-llm-btn" type="button">⚡ Test LLM Connection</button>
+                                </div>
                             </section>
                         </div>
-                        <div class="provider-actions"><button class="btn-secondary" id="refresh-models-btn" type="button">Refresh models</button><button class="btn-secondary" id="test-providers-btn" type="button">Test providers</button><span class="save-note" id="provider-discovery-note">Models are read from each configured endpoint.</span></div>
-                        <div class="setting-divider"></div><div class="section-intro"><span class="section-index">02</span><div><h2>Shortcuts & Input Device</h2><p class="section-desc">Trigger voice dictation without interrupting your workflow.</p></div></div>
-                        <div class="form-grid"><div class="form-group"><label for="hotkey-recorder-input">Global Shortcut</label><div class="hotkey-recorder-box"><input type="text" id="hotkey-recorder-input" value="F9" readonly placeholder="Click to record"><button class="btn-secondary" id="record-hotkey-btn" type="button">Record Hotkey</button></div><span class="input-hint">Choose a key combination not reserved by another app.</span></div><div class="form-group"><label for="audio-device-select">Microphone</label><select id="audio-device-select"><option value="">System Default Microphone</option></select><span class="input-hint">The audio input device used by AudioScribe.</span></div></div>
-                        <div class="form-actions"><button class="btn-primary" id="save-settings-btn" type="button">Save Settings</button><span class="save-note">Changes take effect immediately.</span></div>
+
+                        <div class="provider-actions">
+                            <button class="btn-secondary" id="refresh-models-btn" type="button">Refresh provider models</button>
+                            <span class="save-note" id="provider-discovery-note">Models are dynamically fetched from your configured providers.</span>
+                        </div>
+
+                        <section class="local-models-panel" aria-labelledby="local-models-heading">
+                            <div class="settings-subheading">
+                                <div>
+                                    <h2 id="local-models-heading">Local models</h2>
+                                    <p class="section-desc">Models managed on this computer. See what is installed and remove it without touching provider settings.</p>
+                                </div>
+                                <button class="btn-link-action" id="refresh-local-models-btn" type="button">Refresh</button>
+                            </div>
+                            <div class="local-model-list" id="local-models-list" aria-live="polite">
+                                <p class="placeholder-text">Checking local model storage...</p>
+                            </div>
+                        </section>
+
+                        <section class="runtime-panel" aria-labelledby="runtime-heading">
+                            <div class="settings-subheading">
+                                <div>
+                                    <h2 id="runtime-heading">Runtime</h2>
+                                    <p class="section-desc">Cloud providers run remotely; local providers report the device used by the active engine.</p>
+                                </div>
+                                <span class="runtime-platform" id="runtime-platform">Checking...</span>
+                            </div>
+                            <div class="runtime-grid" id="runtime-info-grid">
+                                <div class="runtime-item"><span>Transcription</span><strong id="runtime-transcription">Checking...</strong></div>
+                                <div class="runtime-item"><span>Post-processing</span><strong id="runtime-post-processing">Checking...</strong></div>
+                                <div class="runtime-item"><span>GPU</span><strong id="runtime-gpu">Checking...</strong></div>
+                                <div class="runtime-item"><span>CPU</span><strong id="runtime-cpu">Checking...</strong></div>
+                            </div>
+                        </section>
+
+                        <div class="setting-divider"></div>
+
+                        <!-- VAD & Hardware Audio Test Section -->
+                        <div class="section-intro">
+                            <span class="section-index">03</span>
+                            <div>
+                                <h2>Audio Hardware, VAD & Live Test Area</h2>
+                                <p class="section-desc">Test your microphone level, verify Voice Activity Detection (VAD) speech threshold, and run a 3-second test dictation.</p>
+                            </div>
+                        </div>
+
+                        <div class="test-area-grid">
+                            <div class="test-mic-card">
+                                <div class="form-group">
+                                    <label for="audio-device-select">Microphone Device</label>
+                                    <select id="audio-device-select">
+                                        <option value="">System Default Microphone</option>
+                                    </select>
+                                </div>
+
+                                <div class="mic-visualizer-box">
+                                    <div class="mic-level-label">
+                                        <span>Live Mic Volume</span>
+                                        <span id="mic-db-value">0%</span>
+                                    </div>
+                                    <div class="mic-level-track">
+                                        <div class="mic-level-fill" id="mic-level-fill"></div>
+                                    </div>
+                                </div>
+
+                                <div class="vad-indicator-row">
+                                    <span class="vad-dot" id="vad-activity-dot"></span>
+                                    <span id="vad-status-text">Silence detected</span>
+                                </div>
+
+                                <div class="test-dictate-controls">
+                                    <button class="btn-primary" id="test-record-btn" type="button">🎙️ Record 3s Test Clip</button>
+                                    <div class="test-result-box hidden" id="test-result-box">
+                                        <p class="test-result-title">Transcription Result:</p>
+                                        <blockquote id="test-result-text">Thinking...</blockquote>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="test-vad-settings">
+                                <div class="form-group">
+                                    <label for="recording-mode-select">Recording Shortcut Mode</label>
+                                    <select id="recording-mode-select">
+                                        <option value="toggle" selected>Toggle Mode (Press shortcut once to start, press again to stop)</option>
+                                        <option value="push_to_talk">Push-to-Talk Mode (Hold shortcut to record, release to transcribe)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="hotkey-recorder-input">Global Shortcut Hotkey</label>
+                                    <div class="hotkey-recorder-box">
+                                        <input type="text" id="hotkey-recorder-input" value="Ctrl + Win" readonly placeholder="Click to record">
+                                        <button class="btn-secondary" id="record-hotkey-btn" type="button">Record Key</button>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="vad-sensitivity-select">VAD Sensitivity</label>
+                                    <select id="vad-sensitivity-select">
+                                        <option value="aggressive">Aggressive (Filters background noise)</option>
+                                        <option value="balanced" selected>Balanced (Recommended)</option>
+                                        <option value="permissive">Permissive (Captures soft speech)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn-primary" id="save-settings-btn" type="button">Save All Settings</button>
+                            <span class="save-note">Settings update your engine immediately.</span>
+                        </div>
                     </div>
                 </div>
 
                 <div class="tab-content" id="tab-diagnostics">
-                    <div class="page-heading compact"><div><p class="eyebrow">Workspace / Diagnostics</p><h1>Diagnostics & Pre-flight</h1><p class="page-description">Verify microphone hardware, API connectivity, and OS permissions.</p></div></div>
-                    <div class="card diagnostics-card"><div class="section-intro"><span class="section-index">01</span><div><h2>System Health Check</h2><p class="section-desc">A quick pre-flight test of all required dictation components.</p></div></div><button class="btn-primary" id="run-preflight-btn" type="button">Run Diagnostic Check</button><div class="diag-output-box" id="diag-results" aria-live="polite"><p class="placeholder-text">Diagnostic results will appear here.</p></div></div>
+                    <div class="page-heading compact">
+                        <div>
+                            <p class="eyebrow">Workspace / Diagnostics</p>
+                            <h1>Diagnostics & Pre-flight</h1>
+                            <p class="page-description">Verify microphone hardware, API connectivity, and OS permissions.</p>
+                        </div>
+                    </div>
+                    <div class="card diagnostics-card">
+                        <div class="section-intro">
+                            <span class="section-index">01</span>
+                            <div>
+                                <h2>System Health Check</h2>
+                                <p class="section-desc">A quick pre-flight test of all required dictation components.</p>
+                            </div>
+                        </div>
+                        <button class="btn-primary" id="run-preflight-btn" type="button">Run Diagnostic Check</button>
+                        <div class="diag-output-box" id="diag-results" aria-live="polite">
+                            <p class="placeholder-text">Diagnostic results will appear here.</p>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- Multi-Step Onboarding Modal -->
+    <div class="onboarding-backdrop hidden" id="onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+        <div class="onboarding-card onboarding-flow">
+            <div class="onboarding-top">
+                <div>
+                    <p class="eyebrow">AudioScribe Setup Wizard</p>
+                    <h2 id="onboarding-title">Welcome to AudioScribe</h2>
+                </div>
+                <button class="btn-link" id="onboarding-skip" type="button">Skip Setup</button>
+            </div>
+
+            <!-- Step Progress Indicator -->
+            <div class="onboarding-progress" aria-label="Setup progress">
+                <span class="onboarding-progress-step active" data-progress="1">1</span><i></i>
+                <span class="onboarding-progress-step" data-progress="2">2</span><i></i>
+                <span class="onboarding-progress-step" data-progress="3">3</span><i></i>
+                <span class="onboarding-progress-step" data-progress="4">4</span><i></i>
+                <span class="onboarding-progress-step" data-progress="5">5</span>
+            </div>
+
+            <!-- Step 1: System Permissions & Language -->
+            <section class="onboarding-step active" data-step="1">
+                <h3>1. Spoken Language & System Permissions</h3>
+                <p>Configure your default spoken language and grant system permissions for microphone access and auto-paste.</p>
+                
+                <div class="onboarding-field">
+                    <label for="ob-language-select">Primary Spoken Language</label>
+                    <select id="ob-language-select" class="onboarding-select">
+                        <option value="auto">🌐 Auto-Detect Language</option>
+                        <option value="pt" selected>🇧🇷 Portuguese (Português)</option>
+                        <option value="en">🇺🇸 English</option>
+                        <option value="es">🇪🇸 Spanish (Español)</option>
+                        <option value="fr">🇫🇷 French (Français)</option>
+                        <option value="de">🇩🇪 German (Deutsch)</option>
+                        <option value="it">🇮🇹 Italian (Italiano)</option>
+                    </select>
+                </div>
+
+                <div class="onboarding-perm-box">
+                    <div class="onboarding-perm-row">
+                        <span>🎙️ Microphone Access</span>
+                        <span class="perm-badge" id="ob-perm-mic">Checking...</span>
+                        <button class="btn-secondary-sm" id="ob-grant-mic-btn" type="button">Request Mic</button>
+                    </div>
+                    <div class="onboarding-perm-row">
+                        <span>⌨️ Auto-Paste & Hotkeys</span>
+                        <span class="perm-badge" id="ob-perm-paste">Checking...</span>
+                        <button class="btn-secondary-sm" id="ob-grant-paste-btn" type="button">Open OS Settings</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 2: Speech Transcription Provider -->
+            <section class="onboarding-step" data-step="2">
+                <h3>2. Speech Transcription Engine</h3>
+                <p>Choose between high-speed Cloud APIs or 100% Offline Local Models that run privately on your device.</p>
+
+                <!-- Dual Mode Selector Tabs -->
+                <div class="engine-mode-tabs">
+                    <button class="engine-mode-btn active" id="ob-mode-cloud-btn" type="button">
+                        <span class="mode-icon">☁️</span>
+                        <div class="mode-text">
+                            <strong>Cloud API Models</strong>
+                            <span>Groq, OpenAI, NVIDIA NIM, Mistral</span>
+                        </div>
+                    </button>
+                    <button class="engine-mode-btn" id="ob-mode-local-btn" type="button">
+                        <span class="mode-icon">🔒</span>
+                        <div class="mode-text">
+                            <strong>Local Models (100% Offline)</strong>
+                            <span>Parakeet & Whisper (Zero Cloud)</span>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Section A: Cloud API Models -->
+                <div class="engine-subpanel" id="ob-cloud-panel">
+                    <div class="provider-logo-grid" id="ob-stt-cloud-grid">
+                        <button class="provider-logo-card selected" data-provider="groq" type="button">
+                            <img src="assets/providers/groq.svg" alt="">
+                            <strong>Groq</strong>
+                            <span>Whisper Large v3 (Fast)</span>
+                        </button>
+                        <button class="provider-logo-card" data-provider="openai" type="button">
+                            <img src="assets/providers/openai.svg" alt="">
+                            <strong>OpenAI</strong>
+                            <span>Whisper-1 / GPT-4o</span>
+                        </button>
+                        <button class="provider-logo-card" data-provider="mistral" type="button">
+                            <img src="assets/providers/mistral.svg" alt="">
+                            <strong>Mistral</strong>
+                            <span>Voxtral Mini</span>
+                        </button>
+                        <button class="provider-logo-card" data-provider="openrouter" type="button">
+                            <img src="assets/providers/openrouter.svg" alt="">
+                            <strong>OpenRouter</strong>
+                            <span>200+ Speech Models</span>
+                        </button>
+                        <button class="provider-logo-card" data-provider="nvidia_nim" type="button">
+                            <img src="assets/providers/nvidia.svg" alt="">
+                            <strong>NVIDIA NIM</strong>
+                            <span>Cloud API (Parakeet/Canary)</span>
+                        </button>
+                    </div>
+
+                    <div class="onboarding-field" id="ob-stt-cloud-model-field">
+                        <label for="ob-stt-model-select">Select Cloud Transcription Model</label>
+                        <select id="ob-stt-model-select" class="onboarding-select">
+                            <option value="groq/whisper-large-v3-turbo">Whisper Large v3 Turbo (Recommended · Fast)</option>
+                            <option value="groq/whisper-large-v3">Whisper Large v3 (High Accuracy)</option>
+                        </select>
+                    </div>
+
+                    <div class="onboarding-field" id="ob-stt-key-field">
+                        <div class="field-label-row">
+                            <label for="ob-stt-key">API Key</label>
+                            <div class="key-status-group">
+                                <span class="key-reuse-badge hidden" id="ob-stt-reuse-badge">✓ Reusing Provider Key</span>
+                                <a href="#" class="get-key-link" id="ob-get-stt-key-link" target="_blank" rel="noopener">Get API Key ↗</a>
+                            </div>
+                        </div>
+                        <div class="input-with-button">
+                            <input id="ob-stt-key" type="password" placeholder="Enter your provider API key" autocomplete="off">
+                            <button type="button" class="btn-test-key" id="ob-test-stt-key-btn">⚡ Test Key</button>
+                        </div>
+                        <span class="test-key-feedback" id="ob-stt-key-feedback"></span>
+                    </div>
+                </div>
+
+                <!-- Section B: Local Models (100% Offline) -->
+                <div class="engine-subpanel hidden" id="ob-local-panel">
+                    <div class="provider-logo-grid" id="ob-stt-local-grid">
+                        <button class="provider-logo-card selected" data-provider="parakeet" type="button">
+                            <img src="assets/providers/nvidia.svg" alt="">
+                            <strong>Local Parakeet</strong>
+                            <span>NVIDIA Sherpa-ONNX (Fast)</span>
+                        </button>
+                        <button class="provider-logo-card" data-provider="local_whisper" type="button">
+                            <img src="assets/providers/whisper.svg" alt="">
+                            <strong>Local Whisper</strong>
+                            <span>Faster-Whisper (Multilingual)</span>
+                        </button>
+                    </div>
+
+                    <div class="onboarding-field" id="ob-stt-local-model-field">
+                        <label for="ob-stt-local-model-select">Select Local Offline Model</label>
+                        <select id="ob-stt-local-model-select" class="onboarding-select">
+                            <option value="parakeet-tdt-0.6b-v3">Parakeet TDT 0.6B (Multilingual · 680MB · Fast)</option>
+                            <option value="parakeet-tdt-1.1b">Parakeet TDT 1.1B (English · ~3.9GB · Large)</option>
+                        </select>
+                    </div>
+
+                    <div class="onboarding-field compact-toggle-field" id="ob-stt-gpu-field">
+                        <label class="toggle-control-label compact-toggle">
+                            <div>
+                                <strong>Prefer hardware acceleration</strong>
+                                <span class="field-help">Uses an available GPU for local Whisper; otherwise the engine uses CPU.</span>
+                            </div>
+                            <input type="checkbox" id="ob-enable-gpu-check" checked>
+                        </label>
+                    </div>
+
+                    <div class="local-download-box" id="ob-local-download-box">
+                        <div class="download-info-row">
+                            <span id="ob-download-model-name">Parakeet TDT 0.6B (680 MB)</span>
+                            <span id="ob-download-status-text">Not Downloaded</span>
+                        </div>
+                        <div class="mic-level-track">
+                            <div class="mic-level-fill" id="ob-download-progress-bar" style="width: 0%; background: var(--accent);"></div>
+                        </div>
+                        <button class="btn-secondary-sm" id="ob-download-model-btn" type="button">📥 Download Local Model Archive</button>
+                        <button class="btn-link-action download-cancel hidden" id="ob-download-cancel-btn" type="button">Cancel download</button>
+                        <button class="btn-danger-quiet hidden" id="ob-download-delete-btn" type="button">Delete partial</button>
+                    </div>
+                    <div class="ob-local-models-list" id="ob-local-models-list" aria-live="polite"></div>
+                </div>
+            </section>
+
+            <!-- Step 3: Optional profile processing -->
+            <section class="onboarding-step" data-step="3">
+                <h3>3. Optional Profile Processing</h3>
+                <p>Choose an LLM only if the default profile should transform transcription. Leaving its instruction blank keeps dictation raw.</p>
+
+                <div class="provider-logo-grid" id="ob-llm-provider-grid">
+                    <button class="provider-logo-card selected" data-provider="none" type="button">
+                        <span class="no-logo-icon">⚡</span>
+                        <strong>Raw Speech</strong>
+                        <span>No LLM post-processing</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="groq" type="button">
+                        <img src="assets/providers/groq.svg" alt="">
+                        <strong>Groq</strong>
+                        <span>Llama 3.3 70B</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="openai" type="button">
+                        <img src="assets/providers/openai.svg" alt="">
+                        <strong>OpenAI</strong>
+                        <span>GPT-4o / Mini</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="nvidia" type="button">
+                        <img src="assets/providers/nvidia.svg" alt="">
+                        <strong>NVIDIA NIM</strong>
+                        <span>Llama 3.3 / Nemotron</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="mistral" type="button">
+                        <img src="assets/providers/mistral.svg" alt="">
+                        <strong>Mistral AI</strong>
+                        <span>Mistral Small / Large</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="openrouter" type="button">
+                        <img src="assets/providers/openrouter.svg" alt="">
+                        <strong>OpenRouter</strong>
+                        <span>Claude / Gemini / Llama</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="anthropic" type="button">
+                        <img src="assets/providers/anthropic.svg" alt="">
+                        <strong>Anthropic</strong>
+                        <span>Claude 3.5 Sonnet</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="gemini" type="button">
+                        <img src="assets/providers/gemini.svg" alt="">
+                        <strong>Gemini</strong>
+                        <span>Gemini 2.5 Flash</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="xai" type="button">
+                        <img src="assets/providers/xai.svg" alt="">
+                        <strong>xAI</strong>
+                        <span>Grok 2</span>
+                    </button>
+                    <button class="provider-logo-card" data-provider="ollama" type="button">
+                        <img src="assets/providers/ollama.svg" alt="">
+                        <strong>Ollama</strong>
+                        <span>Local LLM</span>
+                    </button>
+                </div>
+
+                <div class="onboarding-field hidden" id="ob-llm-model-field">
+                    <label for="ob-llm-model-select">Select Post-Processing Model</label>
+                    <select id="ob-llm-model-select" class="onboarding-select">
+                        <option value="groq/llama-3.3-70b-versatile">Llama 3.3 70B Versatile (Fast & Smart)</option>
+                    </select>
+                </div>
+
+                <div class="onboarding-field hidden" id="ob-llm-key-field">
+                    <div class="field-label-row">
+                        <label for="ob-llm-key">API Key</label>
+                        <div class="key-status-group">
+                            <span class="key-reuse-badge hidden" id="ob-llm-reuse-badge">✓ Reusing Provider Key</span>
+                            <a href="#" class="get-key-link" id="ob-get-llm-key-link" target="_blank" rel="noopener">Get API Key ↗</a>
+                        </div>
+                    </div>
+                    <div class="input-with-button">
+                        <input id="ob-llm-key" type="password" placeholder="Enter your provider API key" autocomplete="off">
+                        <button type="button" class="btn-test-key" id="ob-test-llm-key-btn">⚡ Test</button>
+                    </div>
+                    <span class="test-key-feedback" id="ob-llm-key-feedback"></span>
+                </div>
+
+                <div class="onboarding-field">
+                    <label for="ob-default-profile-prompt">Default profile instruction <small>(optional)</small></label>
+                    <textarea id="ob-default-profile-prompt" rows="3" placeholder="Leave blank for raw transcription. Example: Fix punctuation while preserving every word."></textarea>
+                    <small class="field-help">This instruction runs only for the shortcut chosen in the next step. A blank instruction always returns raw transcription.</small>
+                </div>
+            </section>
+
+            <!-- Step 4: VAD & Hotkey -->
+            <section class="onboarding-step" data-step="4">
+                <h3>4. Voice Activity Detection & Activation Mode</h3>
+                <p>Configure your global shortcut, activation style, and microphone input level.</p>
+
+                <div class="onboarding-form-group">
+                    <label>Global Shortcut Key</label>
+                    <div class="hotkey-recorder-box">
+                        <input type="text" id="ob-hotkey-input" value="Ctrl + Win" readonly>
+                        <button class="btn-secondary" id="ob-record-hotkey-btn" type="button">Change Key</button>
+                    </div>
+                </div>
+
+                <div class="onboarding-field">
+                    <label>Activation Mode</label>
+                    <div class="mode-toggle-group">
+                        <button class="mode-toggle-btn selected" id="ob-mode-tap-btn" type="button">
+                            <strong>Tap to Toggle</strong>
+                            <span>Press shortcut to start, press again to stop</span>
+                        </button>
+                        <button class="mode-toggle-btn" id="ob-mode-hold-btn" type="button">
+                            <strong>Hold to Talk</strong>
+                            <span>Hold shortcut while speaking, release to stop</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="hotkey-test-card" style="margin-top: 14px; padding: 12px; border: 1px dashed var(--line); border-radius: 10px; background: var(--surface-soft); text-align: center;">
+                    <span style="font-size: 12px; text-transform: uppercase; font-weight: 600; color: var(--text-dim); letter-spacing: 0.05em;">Live Hotkey Test Area</span>
+                    <p style="margin: 4px 0 8px 0; font-size: 16px; color: var(--text-soft);">Press your configured shortcut (<kbd id="ob-test-shortcut-label">Ctrl + Win</kbd>) anywhere to test detection.</p>
+                    <span class="perm-badge checking" id="ob-hotkey-test-badge">Awaiting Hotkey Press...</span>
+                </div>
+
+                <div class="test-mic-card">
+                    <div class="mic-visualizer-box">
+                        <div class="mic-level-label">
+                            <span>Live Microphone Input Level</span>
+                            <div class="vad-indicator-row">
+                                <span class="vad-dot" id="ob-vad-indicator-dot"></span>
+                                <span id="ob-vad-label">Silence</span>
+                            </div>
+                        </div>
+                        <div class="mic-level-track">
+                            <div class="mic-level-fill" id="ob-mic-level-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 5: Interactive End-to-End Test Suite -->
+            <section class="onboarding-step" data-step="5">
+                <h3>5. End-to-End Verification Test</h3>
+                <p>Run a 4-point real-time diagnostic test to verify your microphone, recording stream, transcription engine, and auto-paste feature before using AudioScribe.</p>
+
+                <div class="onboarding-test-box">
+                    <div style="margin-bottom: 14px; text-align: center;">
+                        <button class="btn-primary" id="ob-run-full-test-btn" type="button" style="padding: 12px 24px; font-size: 16px; font-weight: 600;">
+                            🚀 Run Full End-to-End Test (Record 3s)
+                        </button>
+                    </div>
+
+                    <!-- 4 Validation Checklist Items -->
+                    <div id="ob-test-checklist" style="display: flex; flex-direction: column; gap: 8px; margin: 12px 0;">
+                        <div class="test-check-item" id="chk-mic" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface-soft); border-radius: 8px; border: 1px solid var(--line);">
+                            <span style="font-size: 16px; font-weight: 500; color: var(--text-main);">1. Microphone Stream & Signal</span>
+                            <span class="perm-badge checking" id="chk-mic-status">Pending</span>
+                        </div>
+
+                        <div class="test-check-item" id="chk-audio" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface-soft); border-radius: 8px; border: 1px solid var(--line);">
+                            <span style="font-size: 16px; font-weight: 500; color: var(--text-main);">2. 3-Second Audio Capture</span>
+                            <span class="perm-badge checking" id="chk-audio-status">Pending</span>
+                        </div>
+
+                        <div class="test-check-item" id="chk-stt" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface-soft); border-radius: 8px; border: 1px solid var(--line);">
+                            <span style="font-size: 16px; font-weight: 500; color: var(--text-main);">3. Speech-to-Text Transcription</span>
+                            <span class="perm-badge checking" id="chk-stt-status">Pending</span>
+                        </div>
+
+                        <div class="test-check-item" id="chk-paste" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface-soft); border-radius: 8px; border: 1px solid var(--line);">
+                            <span style="font-size: 16px; font-weight: 500; color: var(--text-main);">4. Auto-Paste into Active Window</span>
+                            <span class="perm-badge checking" id="chk-paste-status">Pending</span>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Test Paste Box -->
+                    <div style="margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft);">
+                        <label style="font-size: 12px; font-weight: 600; color: var(--text-soft); display: block; margin-bottom: 6px;">
+                            🎯 Interactive Paste Test Input Field:
+                        </label>
+                        <input type="text" id="ob-test-paste-input" placeholder="Click here and press your hotkey, or run the test above..." style="width: 100%; padding: 10px 12px; font-size: 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-main); color: var(--text-main);">
+                        <small style="display: block; margin-top: 4px; color: var(--text-soft); font-size: 12px;">
+                            When auto-paste is tested, the transcribed text will appear directly inside this input box!
+                        </small>
+                    </div>
+
+                    <!-- Transcription Result Box -->
+                    <div class="test-result-box hidden" id="ob-test-preview" style="margin-top: 12px;">
+                        <p class="test-result-title">Transcription Sample:</p>
+                        <blockquote id="ob-test-text">Result will appear here...</blockquote>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Footer Actions -->
+            <div class="onboarding-footer">
+                <span id="onboarding-status" role="status">Step 1 of 5</span>
+                <div class="onboarding-actions">
+                    <button class="btn-secondary hidden" id="onboarding-back" type="button">Back</button>
+                    <button class="btn-primary" id="onboarding-next" type="button">Next Step →</button>
+                </div>
+            </div>
+        </div>
     </div>
     <script src="app.js"></script>
 </body>

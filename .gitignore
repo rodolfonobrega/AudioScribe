@@ -159,3 +159,6 @@ scratch/
 electron/node_modules/
 electron/dist/
 electron/bin/
+!electron/bin/
+electron/bin/*
+!electron/bin/windows-key-listener.ps1

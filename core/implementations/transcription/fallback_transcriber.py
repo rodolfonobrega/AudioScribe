@@ -4,6 +4,7 @@ Supports mixing different providers (LiteLLM, native Whisper, Vosk, etc.).
 """
 
 import time
+from core.utils.preflight import safe_print
 from typing import List, Optional
 
 from core.interfaces.transcriber import AbstractTranscriber
@@ -98,13 +99,13 @@ class FallbackTranscriber(AbstractTranscriber):
                         # Success - update stats and return
                         self._transcriber_usage[transcriber_name] += 1
                         if idx > 0:
-                            print(f"✓ Fallback successful: {transcriber_name}")
+                            safe_print(f"[OK] Fallback successful: {transcriber_name}")
                         return result
 
                 except Exception as e:
                     # Determine if we should retry or fallback
                     if should_fallback(e):
-                        print(f"✗ {transcriber_name} failed: {e}")
+                        safe_print(f"[X] {transcriber_name} failed: {e}")
                         break  # Skip to next transcriber
                     elif should_retry(e) and retry_attempt < self.max_retries - 1:
                         delay = retry_with_backoff(retry_attempt, self.retry_delay)
@@ -116,7 +117,7 @@ class FallbackTranscriber(AbstractTranscriber):
                         continue
                     else:
                         # Unknown error or final retry failed
-                        print(f"✗ {transcriber_name} failed: {e}")
+                        safe_print(f"[X] {transcriber_name} failed: {e}")
                         break
 
             # If we get here, the current transcriber failed after all retries
@@ -126,7 +127,7 @@ class FallbackTranscriber(AbstractTranscriber):
                 self._fallback_count += 1
 
         # All transcribers exhausted
-        print("✗ All fallback transcribers exhausted")
+        safe_print("[X] All fallback transcribers exhausted")
         return None
 
     def transcribe_file(self, file_path: str) -> Optional[str]:
@@ -154,13 +155,13 @@ class FallbackTranscriber(AbstractTranscriber):
                         # Success - update stats and return
                         self._transcriber_usage[transcriber_name] += 1
                         if idx > 0:
-                            print(f"✓ Fallback successful: {transcriber_name}")
+                            safe_print(f"[OK] Fallback successful: {transcriber_name}")
                         return result
 
                 except Exception as e:
                     # Determine if we should retry or fallback
                     if should_fallback(e):
-                        print(f"✗ {transcriber_name} failed: {e}")
+                        safe_print(f"[X] {transcriber_name} failed: {e}")
                         break  # Skip to next transcriber
                     elif should_retry(e) and retry_attempt < self.max_retries - 1:
                         delay = retry_with_backoff(retry_attempt, self.retry_delay)
@@ -172,7 +173,7 @@ class FallbackTranscriber(AbstractTranscriber):
                         continue
                     else:
                         # Unknown error or final retry failed
-                        print(f"✗ {transcriber_name} failed: {e}")
+                        safe_print(f"[X] {transcriber_name} failed: {e}")
                         break
 
             # If we get here, the current transcriber failed after all retries
@@ -182,7 +183,7 @@ class FallbackTranscriber(AbstractTranscriber):
                 self._fallback_count += 1
 
         # All transcribers exhausted
-        print("✗ All fallback transcribers exhausted")
+        safe_print("[X] All fallback transcribers exhausted")
         return None
 
     @property
@@ -212,7 +213,7 @@ class FallbackTranscriber(AbstractTranscriber):
                 # Mark as validated
                 is_primary = idx == 0
                 label = "Primary" if is_primary else "Fallback"
-                print(f"✓ {label} transcriber validated: {transcriber_name}")
+                safe_print(f"[OK] {label} transcriber validated: {transcriber_name}")
 
             except Exception as e:
                 label = "Primary" if idx == 0 else "Fallback"
@@ -220,4 +221,4 @@ class FallbackTranscriber(AbstractTranscriber):
                     f"{label} transcriber validation failed for {transcriber_name}: {e}"
                 )
 
-        print("✓ Transcriber chain ready")
+        safe_print("[OK] Transcriber chain ready")

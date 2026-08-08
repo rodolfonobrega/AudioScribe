@@ -1,6 +1,6 @@
 # Makefile for AudioScribe
 
-.PHONY: help install install-dev requirements test test-coverage test-unit test-integration lint format format-check mypy clean run run-timeout run-file docker-build docker-up docker-down build upload check all init example-config env-file docs version update-deps freeze
+.PHONY: help install install-dev requirements test test-coverage test-unit test-integration lint format format-check mypy clean run run-timeout run-file docker-build docker-up docker-down build upload check all init example-config env-file docs version update-deps freeze electron-dev test-electron-e2e test-electron-physical-hotkey electron-build electron-build-win electron-build-mac electron-build-linux electron-package-engine electron-all
 
 # Default target
 .DEFAULT_GOAL := help
@@ -73,17 +73,11 @@ mypy: ## Run type checking with mypy
 	mypy core/ tests/ --ignore-missing-imports
 	@echo '$(GREEN)✓ Type checking complete$(NC)'
 
-clean: ## Clean up build artifacts
+clean: ## Clean up build artifacts and temporary files
 	@echo '$(BLUE)Cleaning up...$(NC)'
-	rm -rf build/
-	rm -rf dist/
-	rm -rf *.egg-info/
-	rm -rf .pytest_cache/
-	rm -rf .mypy_cache/
-	rm -rf htmlcov/
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
+	python -c "import os, shutil; from pathlib import Path; root = Path('.'); [shutil.rmtree(d, ignore_errors=True) for d in [root/'build', root/'dist', root/'electron'/'dist', root/'electron'/'dist_old', root/'electron'/'bin', root/'tmp-audio-runtime', root/'scratch', root/'.pytest_cache', root/'.mypy_cache', root/'htmlcov'] if d.exists()]; [shutil.rmtree(p, ignore_errors=True) for p in root.glob('**/__pycache__')]; [os.remove(p) for ext in ['*.pyc', '*.pyo', '*.log', '*.tmp'] for p in root.glob(f'**/{ext}') if p.is_file()]"
 	@echo '$(GREEN)✓ Cleanup complete$(NC)'
+
 
 run: ## Run the transcriber with keyboard listener
 	@echo '$(BLUE)Starting AudioScribe...$(NC)'
@@ -149,6 +143,65 @@ version: ## Show version information
 	@echo '$(BLUE)AudioScribe v2.0.0$(NC)'
 	@python --version
 	@pip list | grep -E "(litellm|sounddevice|keyboard)"
+
+# =================================================================
+# Electron / Desktop App
+# =================================================================
+
+ELECTRON_DIR := electron
+ENGINE_BIN := $(ELECTRON_DIR)/bin/audioscribe_engine.exe
+
+electron-dev: ## Run Electron app in development mode (spawns python main.py)
+	@echo '$(BLUE)Starting Electron app (dev mode)...$(NC)'
+	cd $(ELECTRON_DIR) && npx electron .
+
+test-electron-e2e: ## Run hermetic end-to-end Electron UI tests
+	cd $(ELECTRON_DIR) && npm.cmd run test:e2e
+
+test-electron-physical-hotkey: ## Inject F9 through the Windows native hotkey path
+	cd $(ELECTRON_DIR) && npm.cmd run test:e2e:physical-hotkey
+
+test-electron-hotkey: ## Test Electron hotkey & IPC in isolated standalone test script
+	@echo '$(BLUE)Running standalone Electron hotkey test...$(NC)'
+	npx electron standalone_tests/06_electron_hotkey_test.js
+
+debug-keys: ## Run raw key event debugger to see exact key names pressed
+	@echo '$(BLUE)Running raw key event debugger...$(NC)'
+	python standalone_tests/debug_keys.py
+
+test-ctrl-win: ## Test direct Ctrl+Win manual modifier tracking in Python
+	@echo '$(BLUE)Running direct Ctrl+Win manual modifier tracker...$(NC)'
+	python standalone_tests/test_ctrl_win_listener.py
+
+interactive-test: ## Run interactive step-by-step test for Ctrl+Win hotkey + audio recording + STT transcription
+	@echo '$(BLUE)Running interactive step-by-step hotkey and audio test...$(NC)'
+	python standalone_tests/interactive_full_test.py
+
+electron-package-engine: ## Build Python engine into standalone .exe (PyInstaller)
+	@echo '$(BLUE)Packaging Python engine with scripts/build_engine.py...$(NC)'
+	python scripts/build_engine.py
+	@echo '$(GREEN)Engine packaged: $(ENGINE_BIN)$(NC)'
+
+
+electron-build: electron-package-engine electron-build-win ## Build Electron app (default: Windows)
+
+electron-build-win: ## Build Electron app for Windows (.exe installer)
+	@echo '$(BLUE)Building Electron app for Windows...$(NC)'
+	cd $(ELECTRON_DIR) && npx electron-builder --win --publish never
+	@echo '$(GREEN)Windows build complete: $(ELECTRON_DIR)/dist/$(NC)'
+
+electron-build-mac: ## Build Electron app for macOS (.dmg + .zip)
+	@echo '$(BLUE)Building Electron app for macOS...$(NC)'
+	cd $(ELECTRON_DIR) && npx electron-builder --mac --publish never
+	@echo '$(GREEN)macOS build complete: $(ELECTRON_DIR)/dist/$(NC)'
+
+electron-build-linux: ## Build Electron app for Linux (.AppImage + .tar.gz)
+	@echo '$(BLUE)Building Electron app for Linux...$(NC)'
+	cd $(ELECTRON_DIR) && npx electron-builder --linux --publish never
+	@echo '$(GREEN)Linux build complete: $(ELECTRON_DIR)/dist/$(NC)'
+
+electron-all: electron-build-win electron-build-mac electron-build-linux ## Build Electron app for all platforms
+	@echo '$(GREEN)All platform builds complete$(NC)'
 
 update-deps: ## Update dependencies
 	@echo '$(BLUE)Updating dependencies...$(NC)'
