@@ -56,6 +56,18 @@ def main() -> int:
         "tiktoken",
         "--hidden-import",
         "tiktoken_ext.openai_public",
+        "--exclude-module",
+        "torch",
+        "--exclude-module",
+        "cv2",
+        "--exclude-module",
+        "scipy",
+        "--exclude-module",
+        "sklearn",
+        "--exclude-module",
+        "matplotlib",
+        "--exclude-module",
+        "pandas",
         str(ROOT / "main.py"),
     ]
     # LiteLLM resolves its default tiktoken cache relative to its own package.
