@@ -27,7 +27,7 @@ jobs:
           cache: npm
           cache-dependency-path: electron/package-lock.json
       - name: Install Python test dependencies
-        run: python -m pip install --upgrade pip pytest pytest-asyncio -r requirements.txt
+        run: python -m pip install --upgrade pip pytest pytest-asyncio pytest-cov pytest-mock -r requirements.txt
       - name: Security and source checks
         run: |
           python scripts/check_secrets.py
